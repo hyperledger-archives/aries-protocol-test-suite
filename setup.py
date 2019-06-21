@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 def parse_requirements(filename):
     """Load requirements from a pip requirements file."""
     lineiter = (line.strip() for line in open(filename))
-    return [line for line in lineiter if line and not line.startswith("#")]
+    return [line for line in lineiter if line and not line.startswith("#") and not line.startswith("-e")]
 
 if __name__ == '__main__':
     with open('README.md', 'r') as fh:
