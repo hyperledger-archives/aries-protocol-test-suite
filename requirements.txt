@@ -1,5 +1,7 @@
 pytest
 pytest-asyncio
+semver
+sortedcontainers
 
 # This dependency will need to change in production
 -e git+https://github.com/dbluhm/aries-sdk-python.git@master#egg=ariespython
