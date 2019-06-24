@@ -93,6 +93,6 @@ class Noop(Message):  # pylint: disable=too-many-ancestors
             '@type': 'noop/noop/0.0/noop'
         })
 
-        return_route = kwargs.get('return', False)
+        return_route = kwargs.get('return_route', False)
         if return_route:
             self['~transport']['return_route'] = 'all'
