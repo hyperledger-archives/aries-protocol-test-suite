@@ -2,25 +2,26 @@ import asyncio
 from contextlib import suppress
 import logging
 
-from indy import crypto
+from ariespython import crypto
 
-from compat import create_task
-from config import Config
-from hooks import self_hook_point
-from messages.message import Message
-from messages.noop import Noop
-import indy_sdk_utils as utils
-from transport.connection import CannotOpenConnection
 import transport.inbound.standard_in as StdIn
 import transport.outbound.standard_out as StdOut
 import transport.inbound.http as HttpIn
 import transport.outbound.http as HttpOut
 import transport.inbound.websocket as WebSocketIn
+from .compat import create_task
+from .config import Config
+from .message import Message
+from .message import Noop
+import indy_sdk_utils as utils
+from transport.connection import CannotOpenConnection
 
-class UnknownTransportException(Exception): pass
+
+class UnknownTransportException(Exception):
+    """ Thrown on unknown transport in config. """
+
 
 class Conductor:
-    hooks = {}
     def __init__(self):
         self.logger = None
         self.wallet_handle = None
@@ -31,7 +32,6 @@ class Conductor:
         self.open_connections = {}
         self.pending_queues = {}
         self.message_queue = asyncio.Queue()
-        self.hooks = Conductor.hooks.copy()
         self.async_tasks = asyncio.Queue()
 
     @staticmethod
@@ -128,7 +128,7 @@ class Conductor:
                 await conn.close()
                 continue
 
-            if not '~transport' in msg:
+            if '~transport' not in msg:
                 continue
 
             if 'pending_message_count' in msg['~transport'] \
@@ -183,7 +183,6 @@ class Conductor:
     async def message_handled(self):
         self.message_queue.task_done()
 
-    @self_hook_point
     async def unpack(self, message: bytes):
         """ Perform processing to convert bytes off the wire to Message. """
         return await utils.unpack(self.wallet_handle, message)
