@@ -1,10 +1,7 @@
-import re
-from operator import is_not
-from functools import partial
+""" Module base class """
 
-from semver import VersionInfo, parse
+from .utils import Semver
 
-class InvalidModule(Exception): pass
 
 def route_def(routes, msg_type):
     """ Route definition decorator """
@@ -12,39 +9,21 @@ def route_def(routes, msg_type):
         routes[msg_type] = func
     return _route_def
 
-class Semver(VersionInfo):
-    """ Wrapper around the more complete VersionInfo class from semver package.
 
-        This wrapper enables abbreviated versions in message types (i.e. 1.0 not 1.0.0).
-    """
-    SEMVER_RE = re.compile(
-        r'^(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?$'
-    )
+class InvalidModule(Exception):
+    """ Thrown when module is malformed. """
 
-    def __init__(self, *args):
-        super().__init__(*args)
-
-    @staticmethod
-    def from_str(version_str):
-        matches = Semver.SEMVER_RE.match(version_str)
-        if matches:
-            args = list(matches.groups())
-            if not matches.group(3):
-                args.append('0')
-            return Semver(*map(int, filter(partial(is_not, None), args)))
-
-        parts = parse(version_str)
-        return Semver(
-            parts['major'], parts['minor'], parts['patch'],
-            parts['prerelease'], parts['build'])
 
 class MetaModule(type):
+    """ MetaModule:
+        Ensures Module classes are well formed and provides convenience methods
+    """
     def __new__(cls, name, bases, dct):
-        if not 'DOC_URI' in dct:
+        if 'DOC_URI' not in dct:
             raise InvalidModule('DOC_URI missing from module definition')
-        if not 'PROTOCOL' in dct:
+        if 'PROTOCOL' not in dct:
             raise InvalidModule("PROTOCOL missing from module definition")
-        if not 'VERSION' in dct:
+        if 'VERSION' not in dct:
             raise InvalidModule('VERSION missing from module definition')
 
         return type.__new__(cls, name, bases, dct)
@@ -54,10 +33,12 @@ class MetaModule(type):
 
     @property
     def version(cls):
+        """ Convenience property: access VERSION """
         return cls.VERSION
 
     @property
     def normalized_version(cls):
+        """ Convenience property: get normalized version info string """
         if not cls._normalized_version:
             version_info = cls.version_info
             cls._normalized_version = str(version_info)
@@ -65,27 +46,35 @@ class MetaModule(type):
 
     @property
     def version_info(cls):
+        """ Convenience property: get version info (major, minor, patch, etc.)
+        """
         if not cls._version_info:
             cls._version_info = Semver.from_str(cls.VERSION)
         return cls._version_info
 
     @property
     def protocol(cls):
+        """ Convenience property: access PROTOCOL """
         return cls.PROTOCOL
 
     @property
     def doc_uri(cls):
+        """ Convenience property: access DOC_URI """
         return cls.DOC_URI
 
     @property
     def qualified_protocol(cls):
+        """ Convenience property: build qualified protocol identifier """
         return cls.DOC_URI + cls.PROTOCOL
 
     @property
     def protocol_identifer_uri(cls):
+        """ Convenience property: build full protocol identifier """
         return cls.qualified_protocol + '/' + cls.normalized_version
 
-class Module(metaclass=MetaModule):
+
+class Module(metaclass=MetaModule):  # pylint: disable=too-few-public-methods
+    """ Base Module class """
     DOC_URI = None
     PROTOCOL = None
     VERSION = None
