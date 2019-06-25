@@ -19,7 +19,7 @@ async def websocket_handle(request):
     await request.app['connection_queue'].put(ws_conn)
 
     try:
-        await asyncio.wait_for(ws_conn.wait(), 30)
+        await asyncio.wait_for(ws_conn.wait(), 5)
     except asyncio.TimeoutError:
         await ws_conn.close()
 
@@ -44,8 +44,9 @@ class WebSocketInboundTransport(InboundTransport):
 
 class WebSocketConnection(Connection):
     """ WebSocket Inbound connection """
-    def __init__(self, websocket):
+    def __init__(self, websocket, session=None):
         super().__init__(ConnectionCapabilities.DUPLEX)
+        self.session = session
         self.websocket = websocket
 
     @classmethod
@@ -54,20 +55,26 @@ class WebSocketConnection(Connection):
         if 'serviceEndpoint' not in service:
             raise CannotOpenConnection()
 
-        websocket = await aiohttp.ClientSession().ws_connect(
+        session = aiohttp.ClientSession()
+        websocket = await session.ws_connect(
             service['serviceEndpoint']
         )
 
-        return cls(websocket)
+        return cls(websocket, session)
 
     async def recv(self):
-        yield await self.websocket.receive_str()
+        while True:
+            self.ensure_recv()
+            yield (await self.websocket.receive()).data
 
     async def send(self, msg: str):
-        await self.websocket.send_str(msg)
+        self.ensure_send()
+        await self.websocket.send_bytes(msg)
 
     async def close(self):
         await self.websocket.close()
+        if self.session:
+            await self.session.close()
         await super().close()
 
 
