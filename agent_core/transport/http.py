@@ -11,35 +11,37 @@ from transport import InboundConnection, OutboundConnection,\
 LOGGER = logging.getLogger(__name__)
 
 
+async def post_handle(self, request):
+    """ Post handler """
+    msg = await request.read()
+    conn = HTTPInboundConnection(msg)
+    await request.app['connection_queue'].put(conn)
+
+    try:
+        await asyncio.wait_for(conn.wait(), 5)
+    except asyncio.TimeoutError:
+        await conn.close()
+
+    if conn.new_msg:
+        return web.Response(body=conn.new_msg)
+
+    raise web.HTTPAccepted()
+
+
 class HTTPInboundTransport(InboundTransport):
     """ HTTP Inbound Transport """
     async def accept(self, **options):
         routes = [
-            web.post('/indy', self.post_handle)
+            web.post('/indy', post_handle)
         ]
         app = web.Application()
         app.add_routes(routes)
+        app['connection_queue'] = self.connection_queue
         runner = web.AppRunner(app)
         await runner.setup()
         server = web.TCPSite(runner=runner, port=options['port'])
         LOGGER.info('Starting on localhost: %s', options['port'])
         await server.start()
-
-    async def post_handle(self, request):
-        """ Post handler """
-        msg = await request.read()
-        conn = HTTPInboundConnection(msg)
-        await self.connection_queue.put(conn)
-
-        try:
-            await asyncio.wait_for(conn.wait(), 5)
-        except asyncio.TimeoutError:
-            await conn.close()
-
-        if conn.new_msg:
-            return web.Response(body=conn.new_msg)
-
-        raise web.HTTPAccepted()
 
 
 class HTTPInboundConnection(InboundConnection):
