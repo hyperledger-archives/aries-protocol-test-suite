@@ -4,7 +4,7 @@ import logging
 import aiohttp
 from aiohttp import web
 
-from transport import Connection, InboundConnection, OutboundConnection,\
+from . import Connection, InboundConnection, OutboundConnection,\
         ConnectionCapabilities, InboundTransport, CannotOpenConnection
 
 LOGGER = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class WebSocketInboundTransport(InboundTransport):
     """ WebSocket Inbound Transport """
     async def accept(self, **options):
         routes = [
-            web.get('/ws', websocket_handle)
+            web.get('/', websocket_handle)
         ]
         app = web.Application()
         app['connection_queue'] = self.connection_queue

@@ -3,7 +3,7 @@
 import asyncio
 import sys
 import logging
-from transport import InboundConnection, OutboundConnection, \
+from . import InboundConnection, OutboundConnection, \
         ConnectionCapabilities, InboundTransport
 
 LOGGER = logging.getLogger(__name__)

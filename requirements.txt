@@ -1,3 +1,4 @@
+aiohttp
 pytest
 pytest-asyncio
 schema

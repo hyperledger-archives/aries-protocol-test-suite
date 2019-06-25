@@ -5,7 +5,7 @@ import logging
 from aiohttp import web
 import aiohttp
 
-from transport import InboundConnection, OutboundConnection,\
+from . import InboundConnection, OutboundConnection,\
         ConnectionCapabilities, InboundTransport, CannotOpenConnection
 
 LOGGER = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class HTTPInboundTransport(InboundTransport):
     """ HTTP Inbound Transport """
     async def accept(self, **options):
         routes = [
-            web.post('/indy', post_handle)
+            web.post('/', post_handle)
         ]
         app = web.Application()
         app.add_routes(routes)
@@ -40,7 +40,7 @@ class HTTPInboundTransport(InboundTransport):
         runner = web.AppRunner(app)
         await runner.setup()
         server = web.TCPSite(runner=runner, port=options['port'])
-        LOGGER.info('Starting on localhost: %s', options['port'])
+        LOGGER.info('Starting on localhost:%s', options['port'])
         await server.start()
 
 
