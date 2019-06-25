@@ -1,20 +1,16 @@
+""" Agent Conductor
+
+    Coordinates sending and receiving of messages from many connections.
+"""
 import asyncio
 from contextlib import suppress
 import logging
 
-from ariespython import crypto
+#from ariespython import crypto
 
-import transport.inbound.standard_in as StdIn
-import transport.outbound.standard_out as StdOut
-import transport.inbound.http as HttpIn
-import transport.outbound.http as HttpOut
-import transport.inbound.websocket as WebSocketIn
 from .compat import create_task
-from .config import Config
 from .message import Message
 from .message import Noop
-import indy_sdk_utils as utils
-from transport.connection import CannotOpenConnection
 
 
 class UnknownTransportException(Exception):
@@ -22,9 +18,9 @@ class UnknownTransportException(Exception):
 
 
 class Conductor:
-    def __init__(self):
+    def __init__(self, wallet_handle):
         self.logger = None
-        self.wallet_handle = None
+        self.wallet_handle = wallet_handle
         self.inbound_transport = None
         self.outbound_transport = None
         self.transport_options = {}
@@ -49,25 +45,8 @@ class Conductor:
             'http': HttpOut,
         }[transport_str]
 
-    @classmethod
-    def from_wallet_handle_config(cls, wallet_handle, config: Config):
-        conductor = cls()
-        conductor.wallet_handle = wallet_handle
-        conductor.transport_options = config.transport_options()
-        conductor.logger = logging.getLogger(__name__)
-        conductor.logger.setLevel(config.log_level)
-
-        try:
-            conductor.inbound_transport = \
-                    Conductor.in_transport_str_to_mod(config.inbound_transport)
-            conductor.outbound_transport = \
-                    Conductor.out_transport_str_to_mod(config.outbound_transport)
-        except KeyError:
-            raise UnknownTransportException
-
-        return conductor
-
     def schedule_task(self, coro, can_cancel=True):
+        """ Schedule a task for execution. """
         task = create_task(coro)
         self.async_tasks.put_nowait((can_cancel, task))
 
@@ -82,6 +61,7 @@ class Conductor:
         await asyncio.gather(inbound_task, accept_task)
 
     async def shutdown(self):
+        """ Close down conductor, cleaning up scheduled tasks. """
         try:
             await asyncio.wait_for(self.message_queue.join(), 5)
         except asyncio.TimeoutError:
@@ -100,15 +80,18 @@ class Conductor:
                 await task
 
     async def accept(self):
+        """ Start accepting connections. """
         while True:
             self.logger.debug('Accepted new connection')
             conn = await self.connection_queue.get()
             self.schedule_task(self.message_reader(conn))
 
     async def put_message(self, message):
+        """ Put message to message queue """
         self.message_queue.put_nowait(message)
 
     async def message_reader(self, conn):
+        """ Process messages from a connection. """
         await conn.recv_lock.acquire()
         async for msg_bytes in conn.recv():
             if not msg_bytes:
@@ -118,7 +101,8 @@ class Conductor:
             msg = await self.unpack(msg_bytes)
             if not msg.context:
                 # plaintext messages are ignored
-                await conn.close() # TODO keeping connection open may be appropriate
+                # TODO keeping connection open may be appropriate
+                await conn.close()
                 continue
 
             await self.put_message(msg)
@@ -136,7 +120,7 @@ class Conductor:
 
                 # TODO Should only expect remote queue if outbound connection.
                 self.schedule_task(
-                    self.pump_remote_queue(
+                    self.poll_remote_queue(
                         msg.context['from_key'],
                         msg.context['from_did'],
                         msg.context['to_key']
@@ -158,9 +142,15 @@ class Conductor:
 
             if return_route == 'all':
                 self.open_connections[conn_id] = conn
-                self.schedule_task(self.connection_cleanup(conn, msg.context['from_key']), False)
+                self.schedule_task(
+                    self.connection_cleanup(conn, msg.context['from_key']),
+                    False
+                )
                 if conn_id in self.pending_queues:
-                    self.schedule_task(self.send_pending(conn, self.pending_queues[conn_id]), False)
+                    self.schedule_task(
+                        self.send_pending(conn, self.pending_queues[conn_id]),
+                        False
+                    )
 
             elif return_route == 'none' and conn_id in self.open_connections:
                 del self.open_connections[conn_id]
@@ -172,15 +162,18 @@ class Conductor:
         conn.recv_lock.release()
 
     async def connection_cleanup(self, conn, conn_id):
+        """ Connection cleanup task. """
         await conn.wait()
         if conn_id in self.open_connections:
             del self.open_connections[conn_id]
 
     async def recv(self):
+        """ Pop msg off message queue and return """
         msg = await self.message_queue.get()
         return msg
 
     async def message_handled(self):
+        """ Notify queue of message handling complete """
         self.message_queue.task_done()
 
     async def unpack(self, message: bytes):
@@ -188,17 +181,22 @@ class Conductor:
         return await utils.unpack(self.wallet_handle, message)
 
     async def send(self, msg, to_key, **kwargs):
-        from_key = kwargs.get('from_key', None) #default = None
+        """ Send message to another agent.
+        """
+        # TODO: Change to accepting/looking up a service block from DID or key
+        # metadata
+        from_key = kwargs.get('from_key', None)  # default = None
         to_did = kwargs.get('to_did', None)
         meta = kwargs.get('meta', None)
 
-        if meta == None:
+        if meta is None:
             if not to_did:
                 meta = await utils.get_key_metadata(self.wallet_handle, to_key)
             else:
                 meta = await utils.get_did_metadata(self.wallet_handle, to_did)
 
-        if to_key not in self.open_connections or self.open_connections[to_key].closed():
+        if to_key not in self.open_connections \
+                or self.open_connections[to_key].closed():
             try:
                 conn = await self.outbound_transport.open(**meta)
             except CannotOpenConnection:
@@ -218,11 +216,15 @@ class Conductor:
 
         await conn.send(wire_msg)
 
-        if not conn.closed() and conn.can_recv() and not conn.recv_lock.locked():
+        if not conn.closed() \
+                and conn.can_recv() \
+                and not conn.recv_lock.locked():
             self.schedule_task(self.message_reader(conn))
 
     async def send_pending(self, conn, queue):
-        # TODO pending queue and processing of another message calls send, what happens first?
+        """ Send messages off of pending queue. """
+        # TODO pending queue and processing of another message calls send,
+        # what happens first?
         while conn.can_send() and not queue.empty():
             msg, to_key, from_key = queue.get_nowait()
 
@@ -240,6 +242,7 @@ class Conductor:
 
             await conn.send(wire_msg)
 
-    async def pump_remote_queue(self, to_key, to_did, from_key):
+    async def poll_remote_queue(self, to_key, to_did, from_key):
+        """ Retrieve messages on a remote queue by sending a noop. """
         noop = Noop(return_route=True)
         await self.send(noop, to_key, to_did=to_did, from_key=from_key)
