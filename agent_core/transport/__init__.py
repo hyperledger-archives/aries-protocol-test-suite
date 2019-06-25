@@ -1,10 +1,12 @@
 """ Transport Classes """
-
+import logging
 import asyncio
 from enum import Flag, auto
 
+LOGGER = logging.getLogger(__name__)
 
-class UnsupportedMethodException(Exception):
+
+class UnsupportedCapability(Exception):
     """ When Connection type does not support a given method.
     """
 
@@ -12,6 +14,10 @@ class UnsupportedMethodException(Exception):
 class CannotOpenConnection(Exception):
     """ When a connection cannot be opened for the given relationship metadata.
     """
+
+
+class ConnectionClosed(Exception):
+    """ Thrown when connection is closed but a send or recv is attempted. """
 
 
 class ConnectionCapabilities(Flag):
@@ -35,11 +41,11 @@ class Connection:
 
     async def recv(self):
         """ Receive bytes over connection """
-        raise UnsupportedMethodException()
+        raise UnsupportedCapability()
 
     async def send(self, msg: str):
         """ Send bytes over connection """
-        raise UnsupportedMethodException()
+        raise UnsupportedCapability()
 
     async def wait(self):
         """ Wait for connection to close """
@@ -47,7 +53,25 @@ class Connection:
 
     async def close(self):
         """ Close connection """
+        LOGGER.debug('Closing connection %s', self)
         self.done.set()
+
+    def ensure_open(self):
+        """ Convenience method for making sure a connection is open """
+        if self.closed():
+            raise ConnectionClosed()
+
+    def ensure_send(self):
+        """ Convenience method for making sure a connection can send """
+        self.ensure_open()
+        if not self.can_send():
+            raise UnsupportedCapability('Connection cannot send at this time')
+
+    def ensure_recv(self):
+        """ Convenience method for making sure a connection can recv """
+        self.ensure_open()
+        if not self.can_recv():
+            raise UnsupportedCapability('Connection cannot recv at this time')
 
     def closed(self):
         """ Get connection closed state """
@@ -55,15 +79,15 @@ class Connection:
 
     def can_send(self):
         """ Connection can send? """
-        return self.flags & ConnectionCapabilities.SEND
+        return bool(self.flags & ConnectionCapabilities.SEND)
 
     def can_recv(self):
         """ Connection can recv? """
-        return self.flags & ConnectionCapabilities.RECV
+        return bool(self.flags & ConnectionCapabilities.RECV)
 
     def is_duplex(self):
         """ Connection is duplex? """
-        return self.flags & ConnectionCapabilities.DUPLEX
+        return bool(self.flags & ConnectionCapabilities.DUPLEX)
 
     def set_duplex(self):
         """ Change connection capabilities to duplex """
@@ -71,6 +95,7 @@ class Connection:
 
     def set_send(self):
         """ Change connection capabilities to send """
+        LOGGER.debug('Setting connection %s to SEND', self)
         self.flags = ConnectionCapabilities.SEND
 
     def set_recv(self):

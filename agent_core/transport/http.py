@@ -11,7 +11,7 @@ from . import InboundConnection, OutboundConnection,\
 LOGGER = logging.getLogger(__name__)
 
 
-async def post_handle(self, request):
+async def post_handle(request):
     """ Post handler """
     msg = await request.read()
     conn = HTTPInboundConnection(msg)
@@ -52,10 +52,12 @@ class HTTPInboundConnection(InboundConnection):
         self.new_msg = None
 
     async def recv(self):
+        self.ensure_recv()
         self.set_send()
         yield self.msg
 
     async def send(self, msg):
+        self.ensure_send()
         self.new_msg = msg
         await self.close()
 
@@ -70,11 +72,13 @@ class HTTPOutConnection(OutboundConnection):
     @classmethod
     async def open(cls, **service):
         if 'serviceEndpoint' not in service:
+            LOGGER.warning('Could not open connection; service: %s', service)
             raise CannotOpenConnection()
-
+        LOGGER.info('Connecting to %s', service['serviceEndpoint'])
         return cls(service['serviceEndpoint'])
 
     async def send(self, msg):
+        self.ensure_send()
         async with aiohttp.ClientSession() as session:
             headers = {'content-type': 'application/ssi-agent-wire'}
             async with session.post(
@@ -87,8 +91,9 @@ class HTTPOutConnection(OutboundConnection):
                     self.new_msg = await resp.read()
                     self.set_recv()
                 else:
-                    self.close()
+                    await self.close()
 
     async def recv(self):
-        self.close()
+        self.ensure_recv()
+        await self.close()
         yield self.new_msg
