@@ -13,13 +13,15 @@ from .message import Message
 from .message import Noop
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 class UnknownTransportException(Exception):
     """ Thrown on unknown transport in config. """
 
 
 class Conductor:
     def __init__(self, wallet_handle):
-        self.logger = None
         self.wallet_handle = wallet_handle
         self.inbound_transport = None
         self.outbound_transport = None
@@ -30,42 +32,20 @@ class Conductor:
         self.message_queue = asyncio.Queue()
         self.async_tasks = asyncio.Queue()
 
-    @staticmethod
-    def in_transport_str_to_mod(transport_str):
-        return {
-            'stdin': StdIn,
-            'http': HttpIn,
-            'ws': WebSocketIn
-        }[transport_str]
-
-    @staticmethod
-    def out_transport_str_to_mod(transport_str):
-        return {
-            'stdout': StdOut,
-            'http': HttpOut,
-        }[transport_str]
-
     def schedule_task(self, coro, can_cancel=True):
         """ Schedule a task for execution. """
         task = create_task(coro)
         self.async_tasks.put_nowait((can_cancel, task))
 
     async def start(self):
-        inbound_task = create_task(
-            self.inbound_transport.accept(
-                self.connection_queue,
-                **self.transport_options
-            )
-        )
-        accept_task = create_task(self.accept())
-        await asyncio.gather(inbound_task, accept_task)
+        await self.accept()
 
     async def shutdown(self):
         """ Close down conductor, cleaning up scheduled tasks. """
         try:
             await asyncio.wait_for(self.message_queue.join(), 5)
         except asyncio.TimeoutError:
-            self.logger.warning('Could not join queue; cancelling processors.')
+            LOGGER.warning('Could not join queue; cancelling processors.')
 
         for _, conn in self.open_connections.items():
             await conn.close()
@@ -82,8 +62,8 @@ class Conductor:
     async def accept(self):
         """ Start accepting connections. """
         while True:
-            self.logger.debug('Accepted new connection')
             conn = await self.connection_queue.get()
+            LOGGER.debug('Accepted new connection')
             self.schedule_task(self.message_reader(conn))
 
     async def put_message(self, message):
@@ -96,7 +76,7 @@ class Conductor:
         async for msg_bytes in conn.recv():
             if not msg_bytes:
                 continue
-            self.logger.debug('Received message bytes: %s', msg_bytes)
+            LOGGER.debug('Received message bytes: %s', msg_bytes)
 
             msg = await self.unpack(msg_bytes)
             if not msg.context:
