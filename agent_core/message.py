@@ -79,7 +79,10 @@ class Message(UserDict):  # pylint: disable=too-many-ancestors
     @staticmethod
     def deserialize(serialized: str):
         """ Deserialize a message from a json string. """
-        return Message(json.loads(serialized))
+        try:
+            return Message(json.loads(serialized))
+        except json.decoder.JSONDecodeError as err:
+            raise InvalidMessage('Could not deserialize message') from err
 
     def serialize(self):
         """ Serialize a message into a json string. """
