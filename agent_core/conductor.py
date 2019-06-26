@@ -6,11 +6,21 @@ import asyncio
 from contextlib import suppress
 import logging
 
-#from ariespython import crypto
+from ariespython import crypto, did, error
 
+from .transport import CannotOpenConnection
 from .compat import create_task
-from .message import Message
-from .message import Noop
+from .message import Message, Noop
+from .mtc import (
+    MessageTrustContext,
+    CONFIDENTIALITY,
+    INTEGRITY,
+    AUTHENTICATED_ORIGIN,
+    DESERIALIZE_OK,
+    NONREPUDIATION,
+    LIMITED_SCOPE,
+    # PFS?
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -79,7 +89,7 @@ class Conductor:
             LOGGER.debug('Received message bytes: %s', msg_bytes)
 
             msg = await self.unpack(msg_bytes)
-            if not msg.context:
+            if not msg.mtc[CONFIDENTIALITY | INTEGRITY]:
                 # plaintext messages are ignored
                 # TODO keeping connection open may be appropriate
                 await conn.close()
@@ -87,7 +97,7 @@ class Conductor:
 
             await self.put_message(msg)
 
-            if not msg.context['from_key']:
+            if not msg.mtc[AUTHENTICATED_ORIGIN]:
                 # anonymous messages cannot be return routed
                 await conn.close()
                 continue
@@ -101,9 +111,9 @@ class Conductor:
                 # TODO Should only expect remote queue if outbound connection.
                 self.schedule_task(
                     self.poll_remote_queue(
-                        msg.context['from_key'],
-                        msg.context['from_did'],
-                        msg.context['to_key']
+                        msg.mtc.ad['sender_vk'],
+                        msg.mtc.ad['sender_did'],
+                        msg.mtc.ad['recip_vk']
                     ),
                     False
                 )
@@ -118,12 +128,12 @@ class Conductor:
 
             # Return route handling
             return_route = msg['~transport']['return_route']
-            conn_id = msg.context['from_key']
+            conn_id = msg.mtc.ad['sender_vk']
 
             if return_route == 'all':
                 self.open_connections[conn_id] = conn
                 self.schedule_task(
-                    self.connection_cleanup(conn, msg.context['from_key']),
+                    self.connection_cleanup(conn, conn_id),
                     False
                 )
                 if conn_id in self.pending_queues:
@@ -156,29 +166,84 @@ class Conductor:
         """ Notify queue of message handling complete """
         self.message_queue.task_done()
 
-    async def unpack(self, message: bytes):
+    async def unpack(self, encryption_envelope: bytes):
         """ Perform processing to convert bytes off the wire to Message. """
-        return await utils.unpack(self.wallet_handle, message)
+        try:
+            message_bytes, recip_vk, sender_vk = await crypto.unpack_message(
+                self.wallet_handle,
+                encryption_envelope
+            )
+            message = Message.deserialize(message_bytes)
+            message.mtc = MessageTrustContext(
+                # Since we got this far, confidential, deserialize_ok
+                CONFIDENTIALITY | DESERIALIZE_OK,  # Affirmed
+                # Standard encryption envelope is repudiable
+                NONREPUDIATION  # Denied
+            )
+
+            message.mtc.ad['recip_vk'] = recip_vk
+            try:
+                message.mtc.ad['recip_did'] = await did.did_for_key(
+                    self.wallet_handle,
+                    recip_vk
+                )
+            except error.WalletItemNotFound:
+                message.mtc.ad['recip_did'] = None
+
+            if sender_vk:
+                message.mtc[AUTHENTICATED_ORIGIN] = True
+                message.mtc.ad['sender_vk'] = sender_vk
+                try:
+                    message.mtc.ad['sender_did'] = await did.did_for_key(
+                        self.wallet_handle,
+                        sender_vk
+                    )
+                except error.WalletItemNotFound:
+                    message.mtc.ad['sender_did'] = None
+            else:
+                message.mtc[AUTHENTICATED_ORIGIN] = False
+                message.mtc.ad['sender_vk'] = None
+                message.mtc.ad['sender_did'] = None
+
+            return message
+        except error.CommonInvalidStructure:
+            # Message wasn't actually encrypted, let's try just deserializing
+            pass
+
+        message = Message.deserialize(encryption_envelope)
+        message.mtc = MessageTrustContext(
+            DESERIALIZE_OK,
+            CONFIDENTIALITY | INTEGRITY | NONREPUDIATION |
+            AUTHENTICATED_ORIGIN | LIMITED_SCOPE  # | PFS?
+        )
+
+        return message
 
     async def send(self, msg, to_key, **kwargs):
         """ Send message to another agent.
         """
-        # TODO: Change to accepting/looking up a service block from DID or key
-        # metadata
         from_key = kwargs.get('from_key', None)  # default = None
         to_did = kwargs.get('to_did', None)
-        meta = kwargs.get('meta', None)
+        service = kwargs.get('service', None)
 
-        if meta is None:
+        if service is None:
             if not to_did:
-                meta = await utils.get_key_metadata(self.wallet_handle, to_key)
+                metadata = await did.get_key_metadata(
+                    self.wallet_handle,
+                    to_key
+                )
+                service = metadata['service']
             else:
-                meta = await utils.get_did_metadata(self.wallet_handle, to_did)
+                metadata = await did.get_did_metadata(
+                    self.wallet_handle,
+                    to_did
+                )
+                service = metadata['service']
 
         if to_key not in self.open_connections \
                 or self.open_connections[to_key].closed():
             try:
-                conn = await self.outbound_transport.open(**meta)
+                conn = await self.outbound_transport.open(**service)
             except CannotOpenConnection:
                 if to_key not in self.pending_queues:
                     self.pending_queues[to_key] = asyncio.Queue()
@@ -203,8 +268,9 @@ class Conductor:
 
     async def send_pending(self, conn, queue):
         """ Send messages off of pending queue. """
-        # TODO pending queue and processing of another message calls send,
+        # TODO: pending queue and processing of another message calls send,
         # what happens first?
+        # TODO: Send lock?
         while conn.can_send() and not queue.empty():
             msg, to_key, from_key = queue.get_nowait()
 
