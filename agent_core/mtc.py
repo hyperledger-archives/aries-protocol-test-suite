@@ -70,7 +70,7 @@ class MessageTrustContext:
             self,
             affirmed: Context = Context.NONE,
             denied: Context = Context.NONE,
-            additional_data: Dict[Any, Any] = None
+            additional_data: Dict[Any, Any] = {}
                 ):
 
         if affirmed & denied != Context.NONE:

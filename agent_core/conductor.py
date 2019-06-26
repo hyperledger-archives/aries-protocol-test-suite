@@ -9,6 +9,7 @@ import logging
 from ariespython import crypto, did, error
 
 from .transport import CannotOpenConnection
+from .transport.http import HTTPOutConnection
 from .compat import create_task
 from .message import Message, Noop
 from .mtc import (
@@ -31,12 +32,9 @@ class UnknownTransportException(Exception):
 
 
 class Conductor:
-    def __init__(self, wallet_handle):
+    def __init__(self, wallet_handle, connection_queue=asyncio.Queue()):
         self.wallet_handle = wallet_handle
-        self.inbound_transport = None
-        self.outbound_transport = None
-        self.transport_options = {}
-        self.connection_queue = asyncio.Queue()
+        self.connection_queue = connection_queue
         self.open_connections = {}
         self.pending_queues = {}
         self.message_queue = asyncio.Queue()
@@ -89,20 +87,26 @@ class Conductor:
             LOGGER.debug('Received message bytes: %s', msg_bytes)
 
             msg = await self.unpack(msg_bytes)
+            LOGGER.debug('Unpacked message: %s', msg)
             if not msg.mtc[CONFIDENTIALITY | INTEGRITY]:
+                LOGGER.debug('Message is plaintext; skipping')
                 # plaintext messages are ignored
                 # TODO keeping connection open may be appropriate
                 await conn.close()
                 continue
 
+            LOGGER.debug('Putting message to message queue')
             await self.put_message(msg)
 
+            LOGGER.debug('Return Route processing')
             if not msg.mtc[AUTHENTICATED_ORIGIN]:
+                LOGGER.debug('Message is anonymous; not return routing')
                 # anonymous messages cannot be return routed
                 await conn.close()
                 continue
 
             if '~transport' not in msg:
+                LOGGER.debug('No ~transport decorator; skipping')
                 continue
 
             if 'pending_message_count' in msg['~transport'] \
@@ -175,8 +179,8 @@ class Conductor:
             )
             message = Message.deserialize(message_bytes)
             message.mtc = MessageTrustContext(
-                # Since we got this far, confidential, deserialize_ok
-                CONFIDENTIALITY | DESERIALIZE_OK,  # Affirmed
+                # Since we got this far...
+                CONFIDENTIALITY | INTEGRITY | DESERIALIZE_OK,  # Affirmed
                 # Standard encryption envelope is repudiable
                 NONREPUDIATION  # Denied
             )
@@ -243,7 +247,8 @@ class Conductor:
         if to_key not in self.open_connections \
                 or self.open_connections[to_key].closed():
             try:
-                conn = await self.outbound_transport.open(**service)
+                # TODO: Connection type based on service block
+                conn = await HTTPOutConnection.open(**service)
             except CannotOpenConnection:
                 if to_key not in self.pending_queues:
                     self.pending_queues[to_key] = asyncio.Queue()
