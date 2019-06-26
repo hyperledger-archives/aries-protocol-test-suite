@@ -95,9 +95,9 @@ class MessageTrustContext:
         return self._denied
 
     def __getitem__(self, context: Context):
-        if self._affirmed & context:
+        if (self._affirmed & context) == context:
             return True
-        if self._denied & context:
+        if (self._denied & context) == context:
             return False
         return None
 

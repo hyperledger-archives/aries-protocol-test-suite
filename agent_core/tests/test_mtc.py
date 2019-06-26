@@ -91,18 +91,23 @@ def test_get_set():
 
     mtc[CONFIDENTIALITY] = True
     assert mtc.affirmed == CONFIDENTIALITY
+    assert mtc[CONFIDENTIALITY]
     assert mtc.denied == NONE
 
     mtc[SIZE_OK] = True
     assert mtc.affirmed == CONFIDENTIALITY | SIZE_OK
+    assert mtc[CONFIDENTIALITY | SIZE_OK]
     assert mtc.denied == NONE
 
     mtc[SIZE_OK] = False
     assert mtc.affirmed == CONFIDENTIALITY
+    assert mtc[CONFIDENTIALITY]
+    assert not mtc[CONFIDENTIALITY | SIZE_OK]
     assert mtc.denied == SIZE_OK
 
     mtc[AUTHENTICATED_ORIGIN] = True
     assert mtc.affirmed == CONFIDENTIALITY | AUTHENTICATED_ORIGIN
+    assert mtc[CONFIDENTIALITY | AUTHENTICATED_ORIGIN]
     assert mtc.denied == SIZE_OK
 
     mtc[AUTHENTICATED_ORIGIN] = None
