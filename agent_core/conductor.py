@@ -27,10 +27,6 @@ from .mtc import (
 LOGGER = logging.getLogger(__name__)
 
 
-class UnknownTransportException(Exception):
-    """ Thrown on unknown transport in config. """
-
-
 class Conductor:
     def __init__(self, wallet_handle, connection_queue=asyncio.Queue()):
         self.wallet_handle = wallet_handle
