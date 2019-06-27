@@ -57,7 +57,7 @@ class Agent:
         """ Start agent from config. Fulfills its own dependencies. """
 
         # Open wallet
-        wallet_conf = [{'id': config.wallet}, {'key': config.passphrase}]
+        wallet_conf = [{'id': config['wallet']}, {'key': config['passphrase']}]
         try:
             await wallet.create_wallet(*wallet_conf)
         except error.WalletAlreadyExistsError:
@@ -70,7 +70,7 @@ class Agent:
 
         # Create inbound transports
         transports = []
-        for transport in config.inbound_transports:
+        for transport in config['inbound_transports']:
             transport_mod = inbound_transport_str_to_module(transport)
             transports.append(
                 transport_mod(conductor.connection_queue)

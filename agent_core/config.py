@@ -2,9 +2,10 @@
 """
 import sys
 import getpass
-
 import argparse
-from typing import Dict, Any, Sequence
+from typing import Dict, Any
+
+from schema import SchemaError, Schema, Optional, Use
 import toml
 
 
@@ -17,44 +18,41 @@ class Config:
     """ Configuration class used to store and update configuration information.
     """
 
-    config: str
-    wallet: str
-    passphrase: str
-    ephemeral: bool
-    inbound_transports: [str]
-    outbound_transport: str
-    num_messages: int
-    port: int
-    log_level: int
-    halt_on_error: bool
-    static_connection_key: str
-    static_connection_endpoint: str
+    __slots__ = (
+        'config',
+        'wallet',
+        'passphrase',
+        'ephemeral',
+        'inbound_transports',
+        'port',
+        'log_level'
+    )
 
-    def __init__(self):
-        self.config: str = None
-        self.wallet: str = None
-        self.passphrase: str = None
-        self.ephemeral: bool = None
-        self.inbound_transports = None
-        self.outbound_transport: str = None
-        num_messages: int = None
-        self.port: int = None
-        self.log_level: int = None
-        self.halt_on_error: bool = False
+    CONFIG_SCHEMA = {
+        Optional('config'): str,
+        'wallet': str,
+        'passphrase': str,
+        Optional('ephemeral'): bool,
+        Optional('inbound_transports', default=['http']): [str],
+        Optional('port'): int,
+        Optional('log_level', default=50): int,
+    }
 
-    @staticmethod
-    def default_options():
-        return {
-            'wallet': 'agent',
-            'passphrase': 'default',
-            'ephemeral': False,
-            'inbound_transport': 'stdin',
-            'outbound_transport': 'stdout',
-            'num_messages': -1,
-            'port': None,
-            'log_level': 50,
-            'halt_on_error': False,
-        }
+    def __getitem__(self, index):
+        """ Get config option """
+        return getattr(self, index, None)
+
+    @property
+    def __dict__(self):
+        """ Get dictionary representation of config """
+        def _dict_gen(slotted_object):
+            for slot in slotted_object.__slots__:
+                attr = getattr(slotted_object, slot, None)
+                if attr is None:
+                    continue
+                yield (slot, attr)
+
+        return dict(_dict_gen(self))
 
     @staticmethod
     def get_arg_parser():
@@ -102,7 +100,7 @@ class Config:
 
         parser = argparse.ArgumentParser(
             description='Agent',
-            #prog='agent'
+            # prog='agent'
         )
         parser.add_argument(
             '-c',
@@ -115,18 +113,10 @@ class Config:
         parser.add_argument(
             '-i',
             '--inbound-transport',
-            dest='inbound_transport',
+            dest='inbound_transports',
             metavar='INBOUND_TRANSPORT',
-            type=str,
+            nargs='+',
             help='Set the inbound transport type'
-        )
-        parser.add_argument(
-            '-o',
-            '--outbound-transport',
-            dest='outbound_transport',
-            metavar='OUTBOUND_TRANSPORT',
-            type=str,
-            help='Set the outbound transport type'
         )
         parser.add_argument(
             '-w',
@@ -135,7 +125,6 @@ class Config:
             metavar='WALLET',
             type=str,
             help='Specify wallet',
-            required=True,
         )
         parser.add_argument(
             '-p',
@@ -144,8 +133,8 @@ class Config:
             action=PasswordPromptAction,
             metavar='PASS',
             type=str,
-            help='Wallet passphrase; Prompted at execution if PASS is ommitted',
-            required=True
+            help='Wallet passphrase; '
+            'Prompted at execution if PASS is ommitted',
         )
         parser.add_argument(
             '--ephemeral',
@@ -154,25 +143,11 @@ class Config:
             help='Use ephemeral wallets'
         )
         parser.add_argument(
-            '-n',
-            '--num',
-            dest='num_messages',
-            metavar='NUM',
-            type=int,
-            help='Process NUM number of messages and stop'
-        )
-        parser.add_argument(
             '--port',
             dest='port',
             metavar='PORT',
             type=int,
             help='Run inbound transport on PORT'
-        )
-        parser.add_argument(
-            '--halt-on-error',
-            dest='halt_on_error',
-            action='store_true',
-            help='Halt when processing fails'
         )
         logging_group = parser.add_mutually_exclusive_group()
         logging_group.add_argument(
@@ -192,54 +167,62 @@ class Config:
         )
         return parser
 
-    def load_options_from_file(self, config_path: str):
-        options = toml.load(config_path)
-        self.update(options, soft=True)
+    @classmethod
+    def from_options(cls, options: Dict[str, Any]):
+        conf = cls()
+        conf.update(options)
+        conf.apply()
+        return conf
 
-
-    @staticmethod
-    def from_file(config_path: str):
+    @classmethod
+    def from_file(cls, config_path: str):
         """ Create config object from toml file.
         """
-        conf = Config()
-        conf.load_options_from_file(config_path)
-        return conf
+        return cls.from_options(toml.load(config_path))
 
-    @staticmethod
-    def from_args_file_defaults():
-        conf = Config()
-        parser = Config.get_arg_parser()
-        parser.parse_known_args(namespace=conf)
-        if conf.config:
-            conf.load_options_from_file(conf.config)
+    @classmethod
+    def from_args(cls):
+        """ Create config object from command line arguments.
 
-        conf.update(Config.default_options(), soft=True)
-        return conf
+            Configuration file will also be opened if specified by args.
+        """
+        parser = cls.get_arg_parser()
+        options = parser.parse_known_args()[0].__dict__
 
-    def update(self, options: Dict[str, Any], **kwargs):
+        if options['config']:
+            options = {
+                **toml.load(options['config']),
+                **options
+                # By placing options last, the cli args get priority
+            }
+
+        return cls.from_options(options)
+
+    def update(self, options: Dict[str, Any]):
         """ Load configuration from the options dictionary.
         """
-        # TODO: Config validation using Schema library
-        soft = 'soft' in kwargs and kwargs['soft']
+        for slot in self.__slots__:
+            if slot in options and options[slot] is not None:
+                setattr(self, slot, options[slot])
 
-        for var in self.__dict__:
-            if var in options and options[var] is not None:
-                #if not isinstance(options[var], Config.__annotations__[var]):
-                    #err_msg = 'Configuration option {} is an invalid type'.format(var)
-                    #raise InvalidConfigurationException(err_msg)
-
-                if soft:
-                    if self.__dict__[var] is None:
-                        self.__dict__[var] = options[var]
-                else:
-                    self.__dict__[var] = options[var]
+    def apply(self):
+        """ Validate updates to the configuration """
+        try:
+            self.update(  # Update with defaults added by Schema
+                Schema(self.__class__.CONFIG_SCHEMA).validate(self.__dict__)
+            )
+        except SchemaError as err:
+            error_message = 'Failed to validate configration: ' + \
+                    ', '.join([msg for msg in err.autos])
+            raise InvalidConfigurationException(error_message) from err
 
     def transport_options(self):
-        return {'port': self.port} if self.port else {}
+        """ Get options relevant to transport """
+        return {'port': self['port']} if self['port'] else {}
 
 
 if __name__ == '__main__':
 
     print("TESTING CONFIGURATION")
-    CONFIG = Config.from_args_file_defaults()
+    CONFIG = Config.from_args()
     print(CONFIG.__dict__)
