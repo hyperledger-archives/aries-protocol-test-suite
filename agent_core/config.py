@@ -3,6 +3,7 @@
 import sys
 import getpass
 import argparse
+import logging
 from typing import Dict, Any
 
 from schema import SchemaError, Schema, Optional, Use
@@ -25,7 +26,9 @@ class Config:
         'ephemeral',
         'inbound_transports',
         'port',
-        'log_level'
+        'log_level',
+        'log_suppress',
+        'log_include'
     )
 
     CONFIG_SCHEMA = {
@@ -36,6 +39,8 @@ class Config:
         Optional('inbound_transports', default=['http']): [str],
         Optional('port'): int,
         Optional('log_level', default=50): int,
+        Optional('log_suppress', default=[]): [str],
+        Optional('log_include', default=[]): [str],
     }
 
     def __getitem__(self, index):
@@ -108,7 +113,7 @@ class Config:
             dest='config',
             metavar='FILE',
             type=str,
-            help='Load configuration from FILE'
+            help='Load configuration from FILE',
         )
         parser.add_argument(
             '-i',
@@ -116,7 +121,8 @@ class Config:
             dest='inbound_transports',
             metavar='INBOUND_TRANSPORT',
             nargs='+',
-            help='Set the inbound transport type'
+            help='Set the inbound transport type',
+            default=argparse.SUPPRESS
         )
         parser.add_argument(
             '-w',
@@ -125,6 +131,7 @@ class Config:
             metavar='WALLET',
             type=str,
             help='Specify wallet',
+            default=argparse.SUPPRESS
         )
         parser.add_argument(
             '-p',
@@ -135,19 +142,24 @@ class Config:
             type=str,
             help='Wallet passphrase; '
             'Prompted at execution if PASS is ommitted',
+            default=argparse.SUPPRESS
         )
         parser.add_argument(
             '--ephemeral',
             dest='ephemeral',
             action='store_true',
-            help='Use ephemeral wallets'
+            help='Use ephemeral wallets',
+            default=argparse.SUPPRESS
+
         )
         parser.add_argument(
             '--port',
             dest='port',
             metavar='PORT',
             type=int,
-            help='Run inbound transport on PORT'
+            help='Run inbound transport on PORT',
+            default=argparse.SUPPRESS
+
         )
         logging_group = parser.add_mutually_exclusive_group()
         logging_group.add_argument(
@@ -156,14 +168,33 @@ class Config:
             action=VAction,
             dest='log_level',
             metavar='VERBOSITY',
-            help='Set verbosity; -v VERBOSITY or -v, -vv, -vvv'
+            help='Set verbosity; -v VERBOSITY or -v, -vv, -vvv',
+            default=argparse.SUPPRESS
         )
         logging_group.add_argument(
             '--log-level',
             action='store',
             dest='log_level',
             metavar='LOGLEVEL',
-            help='Set log level manually; 50 is CRITICAL, 0 is TRACE'
+            type=int,
+            help='Set log level manually; 50 is CRITICAL, 0 is TRACE',
+            default=argparse.SUPPRESS
+        )
+        parser.add_argument(
+            '--log-suppress',
+            metavar='LOGGER',
+            dest='log_suppress',
+            nargs='+',
+            help='Suppress logs from LOGGER(s)',
+            default=argparse.SUPPRESS
+        )
+        parser.add_argument(
+            '--log-include',
+            metavar='LOGGER',
+            dest='log_include',
+            nargs='+',
+            help='Include logs from LOGGER(s)',
+            default=argparse.SUPPRESS
         )
         return parser
 
@@ -215,6 +246,16 @@ class Config:
             error_message = 'Failed to validate configration: ' + \
                     ', '.join([msg for msg in err.autos])
             raise InvalidConfigurationException(error_message) from err
+
+        logging_handler = logging.StreamHandler()
+        formatter = logging.Formatter('%(levelname)-8s %(name)s : %(message)s')
+        logging_handler.setFormatter(formatter)
+        logging.getLogger().addHandler(logging_handler)
+        logging.getLogger(__name__.split('.')[0]).setLevel(self['log_level'])
+        for logger in self['log_include']:
+            logging.getLogger(logger).setLevel(self['log_level'])
+        for logger in self['log_suppress']:
+            logging.getLogger(logger).setLevel(logging.CRITICAL)
 
     def transport_options(self):
         """ Get options relevant to transport """
