@@ -2,9 +2,10 @@
 
     Defines a simple public API for creating and running an agent.
 """
-import asyncio
 from contextlib import suppress
 from typing import Sequence
+import asyncio
+import logging
 
 from ariespython import wallet, error
 
@@ -44,6 +45,7 @@ class Agent:
                 transports: Sequence[InboundTransport],
                 dispatcher: Dispatcher
                 ):
+        self.logger = logging.getLogger(__name__)
 
         self.wallet_handle = wallet_handle
         self.config = config
@@ -55,14 +57,18 @@ class Agent:
     @classmethod
     async def from_config_async(cls, config: Config):
         """ Start agent from config. Fulfills its own dependencies. """
+        logger = logging.getLogger(__name__)
+        logger.info('Creating Agent from config')
 
         # Open wallet
         wallet_conf = [{'id': config['wallet']}, {'key': config['passphrase']}]
         try:
+            logger.debug('Creating wallet')
             await wallet.create_wallet(*wallet_conf)
         except error.WalletAlreadyExistsError:
             pass
 
+        logger.debug('Opening wallet')
         wallet_handle = await wallet.open_wallet(*wallet_conf)
 
         # Create conductor
@@ -89,14 +95,18 @@ class Agent:
 
     async def start(self):
         """ Start Agent """
+        self.logger.info('Starting Agent...')
         transport_tasks = []
         for transport in self.transports:
+            self.logger.debug('Starting transport %s', type(transport).__name__)
             transport_tasks.append(
                 create_task(
                     transport.accept(**self.config.transport_options())
                 )
             )
+        self.logger.debug('Starting conductor')
         conductor_task = create_task(self.conductor.start())
+        self.logger.debug('Starting Agent main loop')
         main_loop_task = create_task(self.main_loop())
         self.main_task = asyncio.gather(
             *transport_tasks,
