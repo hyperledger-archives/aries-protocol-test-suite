@@ -1,0 +1,5 @@
+wallet = 'test'
+passphrase = 'test'
+inbound_transports = ['http']
+log_level = 10
+port = 3000

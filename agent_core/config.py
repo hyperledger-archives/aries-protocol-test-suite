@@ -4,7 +4,7 @@ import sys
 import getpass
 
 import argparse
-from typing import Dict, Any
+from typing import Dict, Any, Sequence
 import toml
 
 
@@ -21,19 +21,21 @@ class Config:
     wallet: str
     passphrase: str
     ephemeral: bool
-    inbound_transport: str
+    inbound_transports: [str]
     outbound_transport: str
     num_messages: int
     port: int
     log_level: int
     halt_on_error: bool
+    static_connection_key: str
+    static_connection_endpoint: str
 
     def __init__(self):
         self.config: str = None
         self.wallet: str = None
         self.passphrase: str = None
         self.ephemeral: bool = None
-        self.inbound_transport: str = None
+        self.inbound_transports = None
         self.outbound_transport: str = None
         num_messages: int = None
         self.port: int = None
@@ -217,13 +219,14 @@ class Config:
     def update(self, options: Dict[str, Any], **kwargs):
         """ Load configuration from the options dictionary.
         """
+        # TODO: Config validation using Schema library
         soft = 'soft' in kwargs and kwargs['soft']
 
         for var in self.__dict__:
             if var in options and options[var] is not None:
-                if not isinstance(options[var], Config.__annotations__[var]):
-                    err_msg = 'Configuration option {} is an invalid type'.format(var)
-                    raise InvalidConfigurationException(err_msg)
+                #if not isinstance(options[var], Config.__annotations__[var]):
+                    #err_msg = 'Configuration option {} is an invalid type'.format(var)
+                    #raise InvalidConfigurationException(err_msg)
 
                 if soft:
                     if self.__dict__[var] is None:
