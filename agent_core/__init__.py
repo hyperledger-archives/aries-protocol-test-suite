@@ -180,24 +180,40 @@ class AgentConfig(Config):
     """
 
     __slots__ = (
-        'config',
         'wallet',
         'passphrase',
         'ephemeral',
         'transports',
         'port',
-        'log_level',
-        'log_suppress',
-        'log_include'
     )
 
-    CONFIG_SCHEMA = {
-        Optional('config'): str,
+    SCHEMA = {
         'wallet': str,
         'passphrase': str,
         Optional('ephemeral'): bool,
         Optional('transports', default=['http']): [str],
         Optional('port'): int,
+    }
+
+    def transport_options(self):
+        """ Get options relevant to transport """
+        return {'port': self['port']} if self['port'] else {}
+
+
+class CliAgentConfig(AgentConfig):
+    """ Agent Configuration with options helpful for configuring from CLI
+    """
+
+    __slots__ = (
+        'config',
+        'log_level',
+        'log_suppress',
+        'log_include'
+    )
+
+    SCHEMA = {
+        **AgentConfig.SCHEMA,
+        Optional('config'): str,
         Optional('log_level', default=50): int,
         Optional('log_suppress', default=[]): [str],
         Optional('log_include', default=[]): [str],
@@ -388,7 +404,3 @@ class AgentConfig(Config):
             logging.getLogger(logger).setLevel(self['log_level'])
         for logger in self['log_suppress']:
             logging.getLogger(logger).setLevel(logging.CRITICAL)
-
-    def transport_options(self):
-        """ Get options relevant to transport """
-        return {'port': self['port']} if self['port'] else {}
