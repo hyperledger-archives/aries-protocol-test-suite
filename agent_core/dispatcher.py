@@ -28,6 +28,15 @@ class Dispatcher:
 
         return register_route_dec
 
+    def clear_routes(self):
+        """ Clear routes """
+        self.routes.clear()
+
+    def clear_modules(self):
+        """ Clear registered modules """
+        self.modules.clear()
+        self.module_versions.clear()
+
     def route_module(self, mod):
         """ Register a module for routing.
             Modules are routed to based on protocol and version. Newer versions

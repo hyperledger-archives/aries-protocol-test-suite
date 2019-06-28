@@ -157,6 +157,14 @@ class Agent:
         """
         return self.dispatcher.route(msg_type)
 
+    def clear_routes(self):
+        """ Clear routes registered on agent. """
+        return self.dispatcher.clear_routes()
+
     async def register_module(self, module: Module):
         """ Register module """
         return self.dispatcher.register_module(module)
+
+    async def clear_modules(self):
+        """ Clear registered modules. """
+        return self.dispatcher.clear_modules()
