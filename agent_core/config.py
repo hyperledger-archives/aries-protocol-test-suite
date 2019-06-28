@@ -18,6 +18,21 @@ class Config:
 
     SCHEMA = {}
 
+    def __init__(self):
+        """ Inherit __slots__
+
+            Slots *are* inherited by subclasses but the __slots__ tuple itself
+            is not populated with parent slots. The update method relies on
+            being able to easily iterate through slots.
+        """
+        def _parent_slots_gen(obj):
+            for base in obj.__class__.__bases__:
+                for slot in base.__slots__:
+                    yield slot
+
+        self.__class__.__slots__ = \
+            (*_parent_slots_gen(self), *self.__class__.__slots__)
+
     def __getitem__(self, index):
         """ Get config option """
         return getattr(self, index, None)
