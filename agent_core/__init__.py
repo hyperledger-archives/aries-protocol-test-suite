@@ -3,10 +3,16 @@
     Defines a simple public API for creating and running an agent.
 """
 from contextlib import suppress
-from typing import Sequence
+from typing import Dict, Any, Sequence
+import argparse
 import asyncio
+import getpass
 import logging
+import sys
 
+
+from schema import SchemaError, Schema, Optional, Use
+import toml
 from ariespython import wallet, error
 
 from .compat import create_task
@@ -168,3 +174,221 @@ class Agent:
     async def clear_modules(self):
         """ Clear registered modules. """
         return self.dispatcher.clear_modules()
+
+class AgentConfig(Config):
+    """ Configuration class used to store and update configuration information.
+    """
+
+    __slots__ = (
+        'config',
+        'wallet',
+        'passphrase',
+        'ephemeral',
+        'inbound_transports',
+        'port',
+        'log_level',
+        'log_suppress',
+        'log_include'
+    )
+
+    CONFIG_SCHEMA = {
+        Optional('config'): str,
+        'wallet': str,
+        'passphrase': str,
+        Optional('ephemeral'): bool,
+        Optional('inbound_transports', default=['http']): [str],
+        Optional('port'): int,
+        Optional('log_level', default=50): int,
+        Optional('log_suppress', default=[]): [str],
+        Optional('log_include', default=[]): [str],
+    }
+
+    @staticmethod
+    def get_arg_parser():
+        """ Construct an argument parser that matches our configuration.
+        """
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            '-c',
+            '--config',
+            dest='config',
+            metavar='FILE',
+            type=str,
+            help='Load configuration from FILE',
+        )
+        transport_group = parser.add_argument_group(
+            'transport',
+            'Options for configuring transport methods'
+        )
+        transport_group.add_argument(
+            '-i',
+            '--inbound-transport',
+            dest='inbound_transports',
+            metavar='TRANSPORT',
+            nargs='+',
+            help='Set the inbound transports',
+            default=argparse.SUPPRESS
+        )
+        transport_group.add_argument(
+            '--port',
+            dest='port',
+            metavar='PORT',
+            type=int,
+            help='Run inbound transport on PORT',
+            default=argparse.SUPPRESS
+        )
+
+        class PasswordPromptAction(argparse.Action):
+            """ Action for retrieving password from config or prompting
+                on cli (if possible).
+            """
+            def __init__(self, option_strings, dest=None, nargs='?', default=None,
+                         required=False, type=None, metavar=None, help=None):
+                super(PasswordPromptAction, self).__init__(
+                    option_strings=option_strings, dest=dest,
+                    nargs=nargs, default=default, required=required, metavar=metavar,
+                    type=type, help=help
+                )
+
+            def __call__(self, parser, args, values, option_string=None):
+                if not values:
+                    if sys.stdin.isatty():
+                        passphrase = getpass.getpass("Passphrase: ")
+                    else:
+                        passphrase = sys.stdin.readline().rstrip()
+                else:
+                    passphrase = values
+
+                setattr(args, self.dest, passphrase)
+
+        wallet_group = parser.add_argument_group(
+            'wallet',
+            'Wallet configuration options'
+        )
+
+        wallet_group.add_argument(
+            '-w',
+            '--wallet',
+            dest='wallet',
+            metavar='WALLET',
+            type=str,
+            help='Specify wallet',
+            default=argparse.SUPPRESS
+        )
+        wallet_group.add_argument(
+            '-p',
+            '--passphrase',
+            dest='passphrase',
+            action=PasswordPromptAction,
+            metavar='PASS',
+            type=str,
+            help='Wallet passphrase; '
+            'Prompted at execution if PASS is ommitted',
+            default=argparse.SUPPRESS
+        )
+        wallet_group.add_argument(
+            '--ephemeral',
+            dest='ephemeral',
+            action='store_true',
+            help='Use ephemeral wallets',
+            default=argparse.SUPPRESS
+        )
+
+        class VAction(argparse.Action):
+            def __init__(self, option_strings, dest, nargs=None, const=None,
+                         default=None, type=None, choices=None, required=False,
+                         help=None, metavar=None):
+                super(VAction, self).__init__(option_strings, dest, nargs, const,
+                                              default, type, choices, required,
+                                              help, metavar)
+                self.values = 50
+
+            def __call__(self, parser, args, values, option_string=None):
+                # print('values: {v!r}'.format(v=values))
+                if values is None:
+                    self.values -= 10
+                else:
+                    try:
+                        self.values -= int(values) * 10
+                    except ValueError:
+                        self.values -= (values.count('v') + 1) * 10
+                setattr(args, self.dest, self.values)
+
+        logging_group = parser.add_mutually_exclusive_group()
+        logging_group.add_argument(
+            '-v',
+            nargs='?',
+            action=VAction,
+            dest='log_level',
+            metavar='VERBOSITY',
+            help='Set verbosity; -v VERBOSITY or -v, -vv, -vvv',
+            default=argparse.SUPPRESS
+        )
+        logging_group.add_argument(
+            '--log-level',
+            action='store',
+            dest='log_level',
+            metavar='LOGLEVEL',
+            type=int,
+            help='Set log level manually; 50 is CRITICAL, 0 is TRACE',
+            default=argparse.SUPPRESS
+        )
+        parser.add_argument(
+            '--log-suppress',
+            metavar='LOGGER',
+            dest='log_suppress',
+            nargs='+',
+            help='Suppress logs from LOGGER(s)',
+            default=argparse.SUPPRESS
+        )
+        parser.add_argument(
+            '--log-include',
+            metavar='LOGGER',
+            dest='log_include',
+            nargs='+',
+            help='Include logs from LOGGER(s)',
+            default=argparse.SUPPRESS
+        )
+        return parser
+
+    @classmethod
+    def from_file(cls, config_path: str):
+        """ Create config object from toml file.
+        """
+        return cls.from_options(toml.load(config_path))
+
+    @classmethod
+    def from_args(cls):
+        """ Create config object from command line arguments.
+
+            Configuration file will also be opened if specified by args.
+        """
+        parser = cls.get_arg_parser()
+        options = parser.parse_known_args()[0].__dict__
+
+        if options['config']:
+            options = {
+                **toml.load(options['config']),
+                **options
+                # By placing options last, the cli args get priority
+            }
+
+        return cls.from_options(options)
+
+    def apply(self):
+        """ Validate updates to the configuration """
+        super().apply()
+
+        logging_handler = logging.StreamHandler()
+        formatter = logging.Formatter('%(levelname)-8s %(name)s : %(message)s')
+        logging_handler.setFormatter(formatter)
+        logging.getLogger().addHandler(logging_handler)
+        logging.getLogger(__name__.split('.')[0]).setLevel(self['log_level'])
+        for logger in self['log_include']:
+            logging.getLogger(logger).setLevel(self['log_level'])
+        for logger in self['log_suppress']:
+            logging.getLogger(logger).setLevel(logging.CRITICAL)
+
+    def transport_options(self):
+        """ Get options relevant to transport """
+        return {'port': self['port']} if self['port'] else {}
