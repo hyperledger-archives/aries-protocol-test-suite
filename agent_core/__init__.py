@@ -82,7 +82,7 @@ class Agent:
 
         # Create inbound transports
         transports = []
-        for transport in config['inbound_transports']:
+        for transport in config['transports']:
             transport_mod = inbound_transport_str_to_module(transport)
             transports.append(
                 transport_mod(conductor.connection_queue)
@@ -184,7 +184,7 @@ class AgentConfig(Config):
         'wallet',
         'passphrase',
         'ephemeral',
-        'inbound_transports',
+        'transports',
         'port',
         'log_level',
         'log_suppress',
@@ -196,7 +196,7 @@ class AgentConfig(Config):
         'wallet': str,
         'passphrase': str,
         Optional('ephemeral'): bool,
-        Optional('inbound_transports', default=['http']): [str],
+        Optional('transports', default=['http']): [str],
         Optional('port'): int,
         Optional('log_level', default=50): int,
         Optional('log_suppress', default=[]): [str],
@@ -223,7 +223,7 @@ class AgentConfig(Config):
         transport_group.add_argument(
             '-i',
             '--inbound-transport',
-            dest='inbound_transports',
+            dest='transports',
             metavar='TRANSPORT',
             nargs='+',
             help='Set the inbound transports',
