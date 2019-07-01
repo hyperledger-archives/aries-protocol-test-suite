@@ -89,10 +89,13 @@ class Agent:
 
         # Create inbound transports
         transports = []
-        for transport in config['transports']:
-            transport_mod = inbound_transport_str_to_module(transport)
+        for transport_info in config['transport']:
+            transport_mod = inbound_transport_str_to_module(transport_info['name'])
             transports.append(
-                transport_mod(conductor.connection_queue)
+                transport_mod(
+                    conductor.connection_queue,
+                    **transport_info['options']
+                )
             )
 
         # Create dispatcher
@@ -116,9 +119,7 @@ class Agent:
                 type(transport).__name__
             )
             transport_tasks.append(
-                create_task(
-                    transport.accept(**self.config.transport_options())
-                )
+                create_task(transport.accept())
             )
         self.logger.debug('Starting conductor')
         conductor_task = create_task(self.conductor.start())
@@ -219,16 +220,16 @@ class AgentConfig(Config):
         'wallet',
         'passphrase',
         'ephemeral',
-        'transports',
-        'port',
+        'transport',
     )
 
     SCHEMA = {
         'wallet': str,
         'passphrase': str,
-        Optional('ephemeral'): bool,
-        Optional('transports', default=['http']): [str],
-        Optional('port'): int,
+        Optional('ephemeral', default=False): bool,
+        Optional('transport', default=[{'name': 'http', 'port': 3000}]): [
+            {'name': str, 'options': object}
+        ]
     }
 
     def transport_options(self):
@@ -407,7 +408,7 @@ class CliAgentConfig(AgentConfig):
     def from_file(cls, config_path: str):
         """ Create config object from toml file.
         """
-        return cls.from_options(toml.load(config_path))
+        return cls.from_options(toml.load(config_path)['config'])
 
     @classmethod
     def from_args(cls):
@@ -420,7 +421,7 @@ class CliAgentConfig(AgentConfig):
 
         if options['config']:
             options = {
-                **toml.load(options['config']),
+                **toml.load(options['config'])['config'],
                 **options
                 # By placing options last, the cli args get priority
             }

@@ -28,7 +28,7 @@ async def websocket_handle(request):
 
 class WebSocketInboundTransport(InboundTransport):
     """ WebSocket Inbound Transport """
-    async def accept(self, **options):
+    async def accept(self):
         routes = [
             web.get('/', websocket_handle)
         ]
@@ -37,8 +37,11 @@ class WebSocketInboundTransport(InboundTransport):
         app.add_routes(routes)
         runner = web.AppRunner(app)
         await runner.setup()
-        server = web.TCPSite(runner=runner, port=options['port'])
-        LOGGER.info('Starting on websocket localhost:%s/ws', options['port'])
+        server = web.TCPSite(runner=runner, port=self.options['port'])
+        LOGGER.info(
+            'Starting on websocket localhost:%s/ws',
+            self.options['port']
+        )
         await server.start()
 
 

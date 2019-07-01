@@ -11,7 +11,7 @@ LOGGER = logging.getLogger(__name__)
 
 class StdInboundTransport(InboundTransport):
     """ Standard In Transport """
-    async def accept(self, **options):
+    async def accept(self):
         LOGGER.info("Accepting on stdin")
         await self.connection_queue.put(StdInConnection())
 

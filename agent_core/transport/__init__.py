@@ -105,10 +105,11 @@ class Connection:
 
 class InboundTransport:
     """ Inbound Transport base class """
-    def __init__(self, connection_queue):
+    def __init__(self, connection_queue, **options):
         self.connection_queue = connection_queue
+        self.options = options
 
-    async def accept(self, **options):
+    async def accept(self):
         """ Accept connection loop. This method should construct a connection
             and place it on the connection queue.
         """

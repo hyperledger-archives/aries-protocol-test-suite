@@ -8,13 +8,13 @@ import re
 
 import pytest
 from _pytest.terminal import TerminalReporter
-from schema import Optional
 import toml
 
-from agent_core.config import Config
+from agent_core import AgentConfig
 
 
 class AgentTerminalReporter(TerminalReporter):
+    """ Customized PyTest Output """
     @pytest.hookimpl(trylast=True)
     def pytest_sessionstart(self, session):
         self._session = session
@@ -26,25 +26,14 @@ class AgentTerminalReporter(TerminalReporter):
         self.write('\n')
 
 
-class SuiteConfig(Config):
+class SuiteConfig(AgentConfig):
     """ Aries Protocol Test Suite Config class """
     __slots__ = (
-        # Basic agent configuration options
-        'wallet',
-        'passphrase',
-        'ephemeral',
-        'inbound_transport',
-        'port',
-        # Test Suite configuration options
-        'features'
+        'features',
     )
 
     SCHEMA = {
-        'wallet': str,
-        'passphrase': str,
-        Optional('ephemeral', default=False): bool,
-        Optional('inbound_transport', default=[str]): [str],
-        Optional('port'): int,
+        **AgentConfig.SCHEMA,
         'features': [str]
     }
 
@@ -82,16 +71,23 @@ def pytest_configure(config):
     config_path = config.getoption('suite_config')
     config_path = 'config.toml' if not config_path else config_path
     config_path = os.path.join(dirname, config_path)
-    print('\nLoading Agent Test Suite configuration from file: {}\n'.format(config_path))
+    print(
+        '\nLoading Agent Test Suite configuration from file: %s\n' %
+        config_path
+    )
 
-    config.suite_config = SuiteConfig.from_options(toml.load(config_path))
+    config.suite_config = SuiteConfig.from_options(
+        toml.load(config_path)['config']
+    )
 
     # register additional markers
     config.addinivalue_line(
-        "markers", "features(name[, name, ...]): Define what features the test belongs to."
+        "markers", "features(name[, name, ...]):"
+        "Define what features the test belongs to."
     )
     config.addinivalue_line(
-        "markers", "priority(int): Define test priority for ordering tests. Higher numbers occur first."
+        "markers", "priority(int): Define test priority for "
+        "ordering tests. Higher numbers occur first."
     )
 
     # Override default terminal reporter for better test output
@@ -100,7 +96,7 @@ def pytest_configure(config):
     config.pluginmanager.unregister(reporter)
     config.pluginmanager.register(agent_reporter, 'terminalreporter')
 
-    #Compile SELECT_REGEX if given
+    # Compile SELECT_REGEX if given
     select_regex = config.getoption('select')
     config.select_regex = re.compile(select_regex) if select_regex else None
 
@@ -111,7 +107,9 @@ def pytest_collection_modifyitems(items):
         return
 
     def feature_filter(item):
-        feature_names = [mark.args for mark in item.iter_markers(name="features")]
+        feature_names = [
+            mark.args for mark in item.iter_markers(name="features")
+        ]
         feature_names = [item for sublist in feature_names for item in sublist]
         if feature_names:
             for selected_test in item.config.suite_config.features:
@@ -122,7 +120,9 @@ def pytest_collection_modifyitems(items):
         return False
 
     def regex_feature_filter(item):
-        feature_names = [mark.args for mark in item.iter_markers(name="features")]
+        feature_names = [
+            mark.args for mark in item.iter_markers(name="features")
+        ]
         feature_names = [item for sublist in feature_names for item in sublist]
         for feature in feature_names:
             if item.config.select_regex.match(feature):
@@ -132,7 +132,9 @@ def pytest_collection_modifyitems(items):
         return False
 
     def feature_priority_map(item):
-        priorities = [mark.args[0] for mark in item.iter_markers(name="priority")]
+        priorities = [
+            mark.args[0] for mark in item.iter_markers(name="priority")
+        ]
         if priorities:
             item.priority = sorted(priorities, reverse=True)[0]
         else:
@@ -152,10 +154,19 @@ def pytest_collection_modifyitems(items):
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item, call):
+def pytest_runtest_makereport(item, _call):
+    """ Customize reporting """
     outcome = yield
     report = outcome.get_result()
-    tr = item.config.pluginmanager.get_plugin('terminalreporter')
+    term_reporter = item.config.pluginmanager.get_plugin('terminalreporter')
     if report.when == 'call' and report.failed:
-        tr.write_sep('=', 'Failure! Feature: {}, Test: {}'.format(item.selected_feature, item.name), red=True, bold=True)
-        report.toterminal(tr.writer)
+        term_reporter.write_sep(
+            '=',
+            'Failure! Feature: %s, Test: %s' % (
+                item.selected_feature,
+                item.name
+            ),
+            red=True,
+            bold=True
+        )
+        report.toterminal(term_reporter.writer)

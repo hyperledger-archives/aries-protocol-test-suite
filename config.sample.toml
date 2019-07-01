@@ -1,12 +1,11 @@
 ## Aries Protocol Test Suite Sample Configuration ##
 
-# port on which the test agent will listen.
-port = 3000
+# Transports to be run
+[[config.transport]]
+name = 'http'
+options = {port = 3000}
 
-# Transport protocol
-# Possible values: http
-transports = ["http"]
-
+[config]
 # The default name used for wallets created by the test agent.
 wallet = "testing-agent"
 
@@ -19,14 +18,15 @@ ephemeral = true
 # Set the default log level
 # Logs from both the tests and indy-sdk will be visible
 
-# Level    | Numeric value
-#----------|----------------
-# CRITICAL |  50
-# ERROR    |  40
-# WARNING  |  30
-# INFO     |  20
-# DEBUG    |  10
-# NOTSET   |  0
+# Level            | Numeric value
+#------------------|----------------
+# CRITICAL         | 50
+# ERROR            | 40
+# WARNING          | 30
+# INFO             | 20
+# DEBUG            | 10
+# (INDY-SDK) TRACE | 5
+# NOTSET           | 0
 log_level = 30
 
 # A list of tests to be run by the test agent.

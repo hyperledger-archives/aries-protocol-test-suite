@@ -30,7 +30,7 @@ async def post_handle(request):
 
 class HTTPInboundTransport(InboundTransport):
     """ HTTP Inbound Transport """
-    async def accept(self, **options):
+    async def accept(self):
         routes = [
             web.post('/', post_handle)
         ]
@@ -39,8 +39,8 @@ class HTTPInboundTransport(InboundTransport):
         app['connection_queue'] = self.connection_queue
         runner = web.AppRunner(app)
         await runner.setup()
-        server = web.TCPSite(runner=runner, port=options['port'])
-        LOGGER.info('Starting on localhost:%s', options['port'])
+        server = web.TCPSite(runner=runner, port=self.options['port'])
+        LOGGER.info('Starting on localhost:%s', self.options['port'])
         await server.start()
 
 

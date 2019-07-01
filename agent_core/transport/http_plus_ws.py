@@ -12,7 +12,7 @@ LOGGER = logging.getLogger(__name__)
 
 class HTTPPlusWebSocketTransport(InboundTransport):
     """Combined http and websocket inbound transports"""
-    async def accept(self, **options):
+    async def accept(self):
         routes = [
             web.get('/', websocket_handle),
             web.post('/', post_handle)
@@ -22,6 +22,9 @@ class HTTPPlusWebSocketTransport(InboundTransport):
         app.add_routes(routes)
         runner = web.AppRunner(app)
         await runner.setup()
-        server = web.TCPSite(runner=runner, port=options['port'])
-        LOGGER.info('Starting on http and ws on localhost:%s', options['port'])
+        server = web.TCPSite(runner=runner, port=self.options['port'])
+        LOGGER.info(
+            'Starting on http and ws on localhost:%s',
+            self.options['port']
+        )
         await server.start()
