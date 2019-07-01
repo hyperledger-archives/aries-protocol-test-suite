@@ -10,6 +10,7 @@ from ariespython import crypto, did, error
 
 from .transport import CannotOpenConnection
 from .transport.http import HTTPOutConnection
+from .transport.websocket import WebSocketOutboundConnection
 from .compat import create_task
 from .message import Message, Noop
 from .mtc import (
@@ -218,6 +219,17 @@ class Conductor:
 
         return message
 
+    @staticmethod
+    def select_outbound_conn_type(endpoint):
+        """ Outbound connection type selector """
+        if endpoint.startswith('http'):
+            return HTTPOutConnection
+
+        if endpoint.startswith('ws'):
+            return WebSocketOutboundConnection
+
+        raise CannotOpenConnection()
+
     async def send(self, msg, to_key, **kwargs):
         """ Send message to another agent.
         """
@@ -242,14 +254,20 @@ class Conductor:
         if to_key not in self.open_connections \
                 or self.open_connections[to_key].closed():
             try:
-                # TODO: Connection type based on service block
-                conn = await HTTPOutConnection.open(**service)
+                self.logger.debug(
+                    'Opening HTTP Connection to service: %s',
+                    service
+                )
+                conn = await Conductor.select_outbound_conn_type(
+                    service['serviceEndpoint']
+                ).open(**service)
             except CannotOpenConnection:
                 if to_key not in self.pending_queues:
                     self.pending_queues[to_key] = asyncio.Queue()
                 self.pending_queues[to_key].put_nowait((msg, to_key, from_key))
                 return
         else:
+            self.logger.debug('Connection open already')
             conn = self.open_connections[to_key]
 
         wire_msg = await crypto.pack_message(

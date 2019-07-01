@@ -13,7 +13,8 @@ from ariespython import (
 )
 
 from agent_core.compat import create_task
-from agent_core.transport.http import HTTPInboundTransport
+from agent_core.transport.http import HTTPInboundTransport, HTTPOutConnection
+from agent_core.transport.websocket import WebSocketOutboundConnection
 from agent_core.conductor import Conductor
 from agent_core.message import Message
 from agent_core.mtc import (
@@ -139,6 +140,18 @@ async def packed_message_anonymous(wallet_handle, loopback_relationship):
         Message({'@type': 'test/protocol/1.0/test'}).serialize(),
         [a_vk]
     )
+
+@pytest.mark.parametrize(
+    'endpoint, expected',
+    [
+        ('http://example.com', HTTPOutConnection),
+        ('https://example.com', HTTPOutConnection),
+        ('ws://example.com', WebSocketOutboundConnection),
+        ('wss://example.com', WebSocketOutboundConnection)
+    ]
+)
+def test_outbound_conn_selection(endpoint, expected):
+    assert Conductor.select_outbound_conn_type(endpoint) == expected
 
 
 @pytest.mark.asyncio
