@@ -40,8 +40,6 @@ def event_loop():
     return asyncio.get_event_loop()
 
 
-
-
 async def connect_alice_and_bob(alice: Agent, bob: Agent):
     """ Setup connectino between alice and bob """
     logger = logging.getLogger(__name__)
