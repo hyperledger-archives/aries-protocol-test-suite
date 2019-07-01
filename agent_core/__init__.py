@@ -3,7 +3,7 @@
     Defines a simple public API for creating and running an agent.
 """
 from contextlib import suppress
-from typing import Dict, Any, Sequence
+from typing import Sequence
 import argparse
 import asyncio
 import getpass
@@ -11,7 +11,7 @@ import logging
 import sys
 
 
-from schema import SchemaError, Schema, Optional, Use
+from schema import Optional
 import toml
 from ariespython import wallet, error
 
@@ -68,6 +68,13 @@ class Agent:
 
         # Open wallet
         wallet_conf = [{'id': config['wallet']}, {'key': config['passphrase']}]
+        if config['ephemeral']:
+            try:
+                logger.debug('Ephemeral is True; trying to delete wallet')
+                await wallet.delete_wallet(*wallet_conf)
+            except error.WalletNotFoundError:
+                pass
+
         try:
             logger.debug('Creating wallet')
             await wallet.create_wallet(*wallet_conf)
@@ -104,7 +111,10 @@ class Agent:
         self.logger.info('Starting Agent...')
         transport_tasks = []
         for transport in self.transports:
-            self.logger.debug('Starting transport %s', type(transport).__name__)
+            self.logger.debug(
+                'Starting transport %s',
+                type(transport).__name__
+            )
             transport_tasks.append(
                 create_task(
                     transport.accept(**self.config.transport_options())
@@ -138,6 +148,7 @@ class Agent:
         await self.conductor.shutdown()
         with suppress(asyncio.CancelledError):
             await self.main_task
+        await wallet.close_wallet(self.wallet_handle)
 
     async def main_loop(self):
         """ Main loop of Agent
@@ -154,9 +165,9 @@ class Agent:
         """ Send a message to another agent. See Conductor.send() for more
             details.
         """
-        self.conductor.send(*args, **kwargs)
+        return await self.conductor.send(*args, **kwargs)
 
-    async def route(self, msg_type: str):
+    def route(self, msg_type: str):
         """ Route decorator
 
             Used to explicitly define a handler for a message of a given type.
@@ -167,13 +178,38 @@ class Agent:
         """ Clear routes registered on agent. """
         return self.dispatcher.clear_routes()
 
-    async def register_module(self, module: Module):
+    def register_module(self, module: Module):
         """ Register module """
         return self.dispatcher.register_module(module)
 
-    async def clear_modules(self):
+    def clear_modules(self):
         """ Clear registered modules. """
         return self.dispatcher.clear_modules()
+
+    async def clear_wallet(self):
+        """ Close wallet """
+        try:
+            await wallet.close_wallet(self.wallet_handle)
+        except error.WalletInvalidHandle:
+            return
+
+        wallet_conf = [
+            {'id': self.config['wallet']},
+            {'key': self.config['passphrase']}
+        ]
+        try:
+            await wallet.delete_wallet(*wallet_conf)
+        except error.WalletNotFoundError:
+            pass
+
+        try:
+            await wallet.create_wallet(*wallet_conf)
+        except error.WalletAlreadyExistsError:
+            self.logger.error('Wallet was not deleted during clear_wallet')
+
+        self.wallet_handle = await wallet.open_wallet(*wallet_conf)
+        self.conductor.wallet_handle = self.wallet_handle
+
 
 class AgentConfig(Config):
     """ Configuration class used to store and update configuration information.

@@ -78,7 +78,7 @@ def pytest_addoption(parser):
 @pytest.hookimpl(trylast=True)
 def pytest_configure(config):
     """ Load Test Suite Configuration. """
-    dirname = os.path.dirname(__file__)
+    dirname = os.getcwd()
     config_path = config.getoption('suite_config')
     config_path = 'config.toml' if not config_path else config_path
     config_path = os.path.join(dirname, config_path)

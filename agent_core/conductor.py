@@ -24,17 +24,16 @@ from .mtc import (
 )
 
 
-LOGGER = logging.getLogger(__name__)
-
-
 class Conductor:
-    def __init__(self, wallet_handle, connection_queue=asyncio.Queue()):
+    def __init__(self, wallet_handle, connection_queue=None):
         self.wallet_handle = wallet_handle
-        self.connection_queue = connection_queue
+        self.connection_queue = \
+            connection_queue if connection_queue else asyncio.Queue()
         self.open_connections = {}
         self.pending_queues = {}
         self.message_queue = asyncio.Queue()
         self.async_tasks = asyncio.Queue()
+        self.logger = logging.getLogger(__name__)
 
     def schedule_task(self, coro, can_cancel=True):
         """ Schedule a task for execution. """
@@ -49,7 +48,7 @@ class Conductor:
         try:
             await asyncio.wait_for(self.message_queue.join(), 5)
         except asyncio.TimeoutError:
-            LOGGER.warning('Could not join queue; cancelling processors.')
+            self.logger.warning('Could not join queue; cancelling processors.')
 
         for _, conn in self.open_connections.items():
             await conn.close()
@@ -67,7 +66,7 @@ class Conductor:
         """ Start accepting connections. """
         while True:
             conn = await self.connection_queue.get()
-            LOGGER.debug('Accepted new connection')
+            self.logger.debug('Accepted new connection')
             self.schedule_task(self.message_reader(conn))
 
     async def put_message(self, message):
@@ -80,29 +79,29 @@ class Conductor:
         async for msg_bytes in conn.recv():
             if not msg_bytes:
                 continue
-            LOGGER.debug('Received message bytes: %s', msg_bytes)
+            self.logger.debug('Received message bytes: %s', msg_bytes)
 
             msg = await self.unpack(msg_bytes)
-            LOGGER.debug('Unpacked message: %s', msg)
+            self.logger.debug('Unpacked message: %s', msg)
             if not msg.mtc[CONFIDENTIALITY | INTEGRITY]:
-                LOGGER.debug('Message is plaintext; skipping')
+                self.logger.debug('Message is plaintext; skipping')
                 # plaintext messages are ignored
                 # TODO keeping connection open may be appropriate
                 await conn.close()
                 continue
 
-            LOGGER.debug('Putting message to message queue')
+            self.logger.debug('Putting message to message queue')
             await self.put_message(msg)
 
-            LOGGER.debug('Return Route processing')
+            self.logger.debug('Return Route processing')
             if not msg.mtc[AUTHENTICATED_ORIGIN]:
-                LOGGER.debug('Message is anonymous; not return routing')
+                self.logger.debug('Message is anonymous; not return routing')
                 # anonymous messages cannot be return routed
                 await conn.close()
                 continue
 
             if '~transport' not in msg:
-                LOGGER.debug('No ~transport decorator; skipping')
+                self.logger.debug('No ~transport decorator; skipping')
                 continue
 
             if 'pending_message_count' in msg['~transport'] \
