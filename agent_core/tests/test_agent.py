@@ -18,16 +18,14 @@ CONFIG_ALICE = AgentConfig.from_options({
     'wallet': 'alice-test',
     'passphrase': 'alice-test',
     'ephemeral': True,
-    'transports': ['http'],
-    'port': 3333
+    'transport': [{'name': 'http', 'options': {'port': 3333}}],
 })
 
 CONFIG_BOB = AgentConfig.from_options({
     'wallet': 'bob-test',
     'passphrase': 'bob-test',
     'ephemeral': True,
-    'transports': ['http'],
-    'port': 4444
+    'transport': [{'name': 'http', 'options': {'port': 4444}}],
 })
 
 

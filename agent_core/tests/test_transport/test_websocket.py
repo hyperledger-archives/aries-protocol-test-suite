@@ -11,9 +11,9 @@ async def test_websocket_transport(unused_tcp_port_factory):
     """ Test WebSocket Transport """
     port = unused_tcp_port_factory()
     conn_queue = asyncio.Queue()
-    transport = websocket.WebSocketInboundTransport(conn_queue)
+    transport = websocket.WebSocketInboundTransport(conn_queue, port=port)
 
-    transport_task = create_task(transport.accept(port=port))
+    transport_task = create_task(transport.accept())
 
     out_conn = await websocket.WebSocketOutboundConnection.open(
         serviceEndpoint='http://localhost:%d/' % port

@@ -15,10 +15,10 @@ async def test_http(unused_tcp_port_factory):
     """ Test HTTP transport """
     conn_queue = asyncio.Queue()
     port = unused_tcp_port_factory()
-    transport = http.HTTPInboundTransport(conn_queue)
+    transport = http.HTTPInboundTransport(conn_queue, port=port)
 
     # Startup transport
-    transport_task = create_task(transport.accept(port=port))
+    transport_task = create_task(transport.accept())
 
     # Following tests are done in this order: out in in out
     # Out sends a message and waits for In to respond or will timeout

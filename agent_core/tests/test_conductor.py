@@ -86,8 +86,8 @@ async def transport_info(unused_tcp_port, connection_queue):
     port = unused_tcp_port
 
     if task is None:
-        transport_ = HTTPInboundTransport(connection_queue)
-        task = create_task(transport_.accept(port=port))
+        transport_ = HTTPInboundTransport(connection_queue, port=port)
+        task = create_task(transport_.accept())
 
     yield transport_, port
 
