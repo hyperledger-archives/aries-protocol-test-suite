@@ -17,7 +17,7 @@ from ariespython import wallet, error
 
 from .compat import create_task
 from .config import Config
-from .dispatcher import Dispatcher
+from .dispatcher import Dispatcher, NoRegisteredRouteException
 from .conductor import Conductor
 from .transport import InboundTransport, http, std, websocket, http_plus_ws
 from .module import Module
@@ -159,8 +159,16 @@ class Agent:
         """
         while True:
             msg = await self.conductor.recv()
-            await self.dispatcher.dispatch(msg, self)
-            await self.conductor.message_handled()
+
+            try:
+                await self.dispatcher.dispatch(msg, self)
+            except NoRegisteredRouteException:
+                self.logger.warning(
+                    'Dispatching message to handler failed; '
+                    'No registered route for message of type: %s', msg.type
+                )
+            finally:
+                await self.conductor.message_handled()
 
     async def send(self, *args, **kwargs):
         """ Send a message to another agent. See Conductor.send() for more
