@@ -15,6 +15,12 @@ passphrase = "test"
 # Specify whether wallets should be ephemeral
 ephemeral = true
 
+## Logging ##
+active_logs = [
+    'protocol_tests',
+#'indy'
+]
+
 # Set the default log level
 # Logs from both the tests and indy-sdk will be visible
 

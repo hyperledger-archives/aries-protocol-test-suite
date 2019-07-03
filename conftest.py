@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import re
+import logging
 
 import pytest
 from _pytest.terminal import TerminalReporter
@@ -30,12 +31,30 @@ class SuiteConfig(AgentConfig):
     """ Aries Protocol Test Suite Config class """
     __slots__ = (
         'features',
+        'static_connection',
+        'active_logs',
+        'log_level'
     )
 
     SCHEMA = {
         **AgentConfig.SCHEMA,
-        'features': [str]
+        'features': [str],
+        'static_connection': {
+            'did': str,
+            'verkey': str,
+            'endpoint': str
+        },
+        'active_logs': [str],
+        'log_level': int
     }
+
+    def apply(self):
+        super().apply()
+
+        # Apply logging configuration
+        logging.getLogger().setLevel(logging.WARNING)
+        for logger in self['active_logs']:
+            logging.getLogger(logger).setLevel(self['log_level'])
 
 
 def pytest_addoption(parser):
@@ -154,7 +173,7 @@ def pytest_collection_modifyitems(items):
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item, _call):
+def pytest_runtest_makereport(item, call):
     """ Customize reporting """
     outcome = yield
     report = outcome.get_result()

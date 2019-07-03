@@ -29,6 +29,6 @@ if __name__ == '__main__':
             'Operating System :: OS Independent'
         ],
         scripts=[
-            'scripts/agtest'
+            'scripts/protocoltest'
         ]
     )

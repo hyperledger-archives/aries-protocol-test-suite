@@ -26,8 +26,6 @@ from agent_core.mtc import (
     NONREPUDIATION
 )
 
-logging.getLogger('indy').setLevel(50)
-
 
 @pytest.fixture(scope='module')
 def event_loop():

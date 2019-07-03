@@ -88,6 +88,9 @@ class Message(UserDict):  # pylint: disable=too-many-ancestors
         """ Serialize a message into a json string. """
         return json.dumps(self.data)
 
+    def pretty_print(self):
+        return json.dumps(self.data, indent=2)
+
 
 class Noop(Message):  # pylint: disable=too-many-ancestors
     """ Noop message """

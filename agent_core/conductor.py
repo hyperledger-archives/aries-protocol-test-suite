@@ -3,6 +3,7 @@
     Coordinates sending and receiving of messages from many connections.
 """
 import asyncio
+from functools import reduce
 from contextlib import suppress
 import logging
 
@@ -33,13 +34,31 @@ class Conductor:
         self.open_connections = {}
         self.pending_queues = {}
         self.message_queue = asyncio.Queue()
-        self.async_tasks = asyncio.Queue()
+        self.async_tasks = []
         self.logger = logging.getLogger(__name__)
 
     def schedule_task(self, coro, can_cancel=True):
         """ Schedule a task for execution. """
         task = create_task(coro)
-        self.async_tasks.put_nowait((can_cancel, task))
+        self.async_tasks.append((can_cancel, task))
+
+    def cleanup_tasks(self):
+        """ Process results from scheduled tasks and shrink task list.
+            Will raise exceptions if any.
+        """
+        def _task_reduce(acc, task_tuple):
+            _, task = task_tuple
+            if task.done():
+                acc[0].append(task_tuple)
+            else:
+                acc[1].append(task_tuple)
+            return acc
+
+        finished, unfinished = reduce(_task_reduce, self.async_tasks, ([], []))
+        self.async_tasks = unfinished
+        for _, task in finished:
+            task.result()  # raise any exceptions
+
 
     async def start(self):
         await self.accept()
@@ -54,8 +73,7 @@ class Conductor:
         for _, conn in self.open_connections.items():
             await conn.close()
 
-        while not self.async_tasks.empty():
-            can_cancel, task = self.async_tasks.get_nowait()
+        for (can_cancel, task) in self.async_tasks:
             if can_cancel:
                 task.cancel()
                 with suppress(asyncio.CancelledError):
