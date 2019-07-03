@@ -43,7 +43,7 @@ async def static_connection(agent, static_connection_info):
 @pytest.mark.asyncio
 @pytest.mark.features('simple')
 async def test_simple_messaging(config, agent):
-    """ Show a simple messages being passed to and from tested agent """
+    """ Show simple messages being passed to and from tested agent """
 
     _my_did, my_vk, their_did, their_vk = \
         await static_connection(agent, config['static_connection'])
@@ -66,8 +66,8 @@ async def test_simple_messaging(config, agent):
         from_vk=my_vk
     )
 
-    msg = await agent.expect_message('test/protocol/1.0/test', 1)
-    print('Received message:', msg.pretty_print())
-    assert expected_schema.validate(msg)
+    pong = await agent.expect_message('test/protocol/1.0/test', 1)
+    print('Received message:', pong.pretty_print())
+    assert expected_schema.validate(pong)
 
     assert agent.ok()
