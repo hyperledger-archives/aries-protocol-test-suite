@@ -76,9 +76,8 @@ class Conductor:
         for (can_cancel, task) in self.async_tasks:
             if can_cancel:
                 task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await task
-            else:
+
+            with suppress(asyncio.CancelledError):
                 await task
 
     async def accept(self):
@@ -152,7 +151,7 @@ class Conductor:
                 self.open_connections[conn_id] = conn
                 self.schedule_task(
                     self.connection_cleanup(conn, conn_id),
-                    False
+                    True
                 )
                 if conn_id in self.pending_queues:
                     self.schedule_task(
