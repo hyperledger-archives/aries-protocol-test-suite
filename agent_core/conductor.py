@@ -252,25 +252,27 @@ class Conductor:
         """ Send message to another agent.
         """
         from_key = kwargs.get('from_key', None)  # default = None
-        to_did = kwargs.get('to_did', None)
-        service = kwargs.get('service', None)
-
-        if service is None:
-            if not to_did:
-                metadata = await did.get_key_metadata(
-                    self.wallet_handle,
-                    to_key
-                )
-                service = metadata['service']
-            else:
-                metadata = await did.get_did_metadata(
-                    self.wallet_handle,
-                    to_did
-                )
-                service = metadata['service']
 
         if to_key not in self.open_connections \
                 or self.open_connections[to_key].closed():
+
+            to_did = kwargs.get('to_did', None)
+            service = kwargs.get('service', None)
+
+            if service is None:
+                if not to_did:
+                    metadata = await did.get_key_metadata(
+                        self.wallet_handle,
+                        to_key
+                    )
+                    service = metadata['service']
+                else:
+                    metadata = await did.get_did_metadata(
+                        self.wallet_handle,
+                        to_did
+                    )
+                    service = metadata['service']
+
             try:
                 self.logger.debug(
                     'Opening HTTP Connection to service: %s',

@@ -1,7 +1,7 @@
 """ Module for storing and updating configuration.
 """
 from typing import Dict, Any
-
+import inspect
 from schema import SchemaError, Schema
 
 
@@ -26,9 +26,10 @@ class Config:
             being able to easily iterate through slots.
         """
         def _parent_slots_gen(obj):
-            for base in obj.__class__.__bases__:
-                for slot in base.__slots__:
-                    yield slot
+            for base in inspect.getmro(obj.__class__):
+                if hasattr(base, '__slots__'):
+                    for slot in base.__slots__:
+                        yield slot
 
         self.__class__.__slots__ = \
             (*_parent_slots_gen(self), *self.__class__.__slots__)

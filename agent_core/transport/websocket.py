@@ -18,10 +18,7 @@ async def websocket_handle(request):
     ws_conn = WebSocketInboundConnection(websocket)
     await request.app['connection_queue'].put(ws_conn)
 
-    try:
-        await asyncio.wait_for(ws_conn.wait(), 5)
-    except asyncio.TimeoutError:
-        await ws_conn.close()
+    await ws_conn.wait()
 
     return websocket
 
@@ -66,13 +63,15 @@ class WebSocketConnection(Connection):
         return cls(websocket, session)
 
     async def recv(self):
-        while True:
-            self.ensure_recv()
-            yield (await self.websocket.receive()).data
+        LOGGER.debug('Websocket recv loop')
+        self.ensure_recv()
+        async for msg in self.websocket:
+            yield msg.data.encode('ascii')
 
-    async def send(self, msg: str):
+
+    async def send(self, msg: bytes):
         self.ensure_send()
-        await self.websocket.send_bytes(msg)
+        await self.websocket.send_str(msg.decode('ascii'))
 
     async def close(self):
         await self.websocket.close()
