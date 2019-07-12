@@ -114,6 +114,7 @@ async def loopback_relationship(wallet_handle, transport_info):
             }
         }
     )
+    await did.map_key_to_did(wallet_handle, a_vk, a_did)
 
     return a_did, a_vk
 
