@@ -146,6 +146,8 @@ class Agent:
     async def shutdown(self):
         """ Shutdown Agent, raising any encountered exceptions """
         self.main_task.cancel()
+        for transport in self.transports:
+            await transport.shutdown()
         await self.conductor.shutdown()
         with suppress(asyncio.CancelledError):
             await self.main_task
