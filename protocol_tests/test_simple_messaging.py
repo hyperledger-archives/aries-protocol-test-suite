@@ -6,6 +6,13 @@ import pytest
 from ariespython import did
 
 from agent_core.message import Message
+from agent_core.mtc import (
+    AUTHENTICATED_ORIGIN,
+    CONFIDENTIALITY,
+    DESERIALIZE_OK,
+    INTEGRITY,
+    NONREPUDIATION
+)
 from . import MessageSchema
 
 
@@ -31,11 +38,13 @@ async def static_connection(agent, static_connection_info):
             }
         }
     )
+    await did.map_key_to_did(agent.wallet_handle, their_vk, their_did)
 
     my_did, my_vk = await did.create_and_store_my_did(
         agent.wallet_handle,
         {'seed': '00000000000000000000000000000000'}
     )
+    await did.map_key_to_did(agent.wallet_handle, my_vk, my_did)
 
     return my_did, my_vk, their_did, their_vk
 
@@ -51,7 +60,7 @@ async def test_simple_messaging(config, agent):
     expected_schema = MessageSchema({
         '@type': 'test/protocol/1.0/test',
         '@id': str,
-        'msg': str
+        'msg': 'pong'
     })
 
     ping = Message({
@@ -68,6 +77,13 @@ async def test_simple_messaging(config, agent):
 
     pong = await agent.expect_message('test/protocol/1.0/test', 1)
     print('Received message:', pong.pretty_print())
-    assert expected_schema.validate(pong)
 
+    assert pong.mtc[
+        CONFIDENTIALITY | INTEGRITY | AUTHENTICATED_ORIGIN | DESERIALIZE_OK
+    ]
+    assert not pong.mtc[NONREPUDIATION]
+    assert pong.mtc.ad['sender_vk'] == their_vk
+    assert pong.mtc.ad['recip_vk'] == my_vk
+
+    assert expected_schema.validate(pong)
     assert agent.ok()
