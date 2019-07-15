@@ -37,7 +37,7 @@ log_level = 30
 
 # A list of tests to be run by the test agent.
 features = [
-"core.manual"
+"simple"
 #"connection.manual",
 #"basicmessage.manual",
 #"trustping.manual"
