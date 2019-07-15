@@ -49,3 +49,4 @@ async def test_websocket_transport(unused_tcp_port_factory):
         await in_conn.send(b'test')
 
     transport_task.cancel()
+    await asyncio.sleep(.25)
