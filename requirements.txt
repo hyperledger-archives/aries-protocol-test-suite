@@ -1,10 +1,8 @@
 aiohttp
+aries-sdk-python
 pytest
 pytest-asyncio
 schema
 semver
 sortedcontainers
 toml
-
-# This dependency will need to change in production
--e git+https://github.com/dbluhm/aries-sdk-python.git@master#egg=ariespython
