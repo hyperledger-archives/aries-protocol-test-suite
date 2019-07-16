@@ -59,7 +59,7 @@ async def wallet_handle(wallet_credentials):
     """ Wallet handle fixture """
     try:
         await wallet.delete_wallet(*wallet_credentials)
-    except error.WalletNotFound:
+    except error.WalletNotFoundError:
         pass
     finally:
         await wallet.create_wallet(*wallet_credentials)
