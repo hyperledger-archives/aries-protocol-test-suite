@@ -1,5 +1,5 @@
 aiohttp
-aries-sdk-python
+aries-sdk-python==0.2.4
 pytest
 pytest-asyncio
 schema

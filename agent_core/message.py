@@ -38,15 +38,23 @@ MESSAGE_SCHEMA = Schema({
 })
 
 
-class Message(UserDict):  # pylint: disable=too-many-ancestors
+class Message(dict):
     """ Message base class.
         Inherits from UserDict meaning it behaves like a dictionary.
     """
+    __slots__ = (
+        'mtc',
+        'doc_uri',
+        'protocol',
+        'version',
+        'version_info',
+        'short_type'
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         try:
-            self.data = MESSAGE_SCHEMA.validate(self.data)
+            self.update(MESSAGE_SCHEMA.validate(dict(self)))
         except SchemaError as err:
             raise InvalidMessage('Invalid message type') from err
 
@@ -61,12 +69,12 @@ class Message(UserDict):  # pylint: disable=too-many-ancestors
     @property
     def type(self):
         """ Shortcut for msg['@type'] """
-        return self.data['@type']
+        return self['@type']
 
     @property
     def id(self):  # pylint: disable=invalid-name
         """ Shortcut for msg['@id'] """
-        return self.data['@id']
+        return self['@id']
 
     @property
     def qualified_protocol(self):
@@ -86,10 +94,10 @@ class Message(UserDict):  # pylint: disable=too-many-ancestors
 
     def serialize(self):
         """ Serialize a message into a json string. """
-        return json.dumps(self.data)
+        return json.dumps(self)
 
     def pretty_print(self):
-        return json.dumps(self.data, indent=2)
+        return json.dumps(self, indent=2)
 
 
 class Noop(Message):  # pylint: disable=too-many-ancestors
