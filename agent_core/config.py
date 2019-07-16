@@ -38,6 +38,9 @@ class Config:
         """ Get config option """
         return getattr(self, index, None)
 
+    def __contains__(self, subject):
+        return hasattr(self, subject)
+
     @property
     def __dict__(self):
         """ Get dictionary representation of config """

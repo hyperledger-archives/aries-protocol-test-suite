@@ -10,6 +10,7 @@ import logging
 import pytest
 from _pytest.terminal import TerminalReporter
 import toml
+from schema import Optional
 
 from agent_core import AgentConfig
 
@@ -30,33 +31,37 @@ class AgentTerminalReporter(TerminalReporter):
 class SuiteConfig(AgentConfig):
     """ Aries Protocol Test Suite Config class """
     __slots__ = (
+        'endpoint',
         'features',
         'static_connection',
-        'active_logs',
-        'log_level',
-        'endpoint'
+        'logging',
     )
 
     SCHEMA = {
         **AgentConfig.SCHEMA,
+        'endpoint': str,
         'features': [str],
-        'static_connection': {
+        Optional('logging'): {
+            'active_logs': [str],
+            'log_level': int,
+        },
+        Optional('static_connection'): {
             'did': str,
             'verkey': str,
             'endpoint': str
         },
-        'active_logs': [str],
-        'log_level': int,
-        'endpoint': str
     }
 
     def apply(self):
         super().apply()
 
         # Apply logging configuration
-        logging.getLogger().setLevel(logging.WARNING)
-        for logger in self['active_logs']:
-            logging.getLogger(logger).setLevel(self['log_level'])
+        if 'logging' in self:
+            logging.getLogger().setLevel(logging.WARNING)
+            for logger in self['logging']['active_logs']:
+                logging.getLogger(logger).setLevel(
+                    self['logging']['log_level']
+                )
 
 
 def pytest_addoption(parser):
