@@ -15,6 +15,9 @@ passphrase = "test"
 # Specify whether wallets should be ephemeral
 ephemeral = true
 
+# Endpoint used in connections
+endpoint = "http://localhost:3000/"
+
 ## Logging ##
 active_logs = [
     'protocol_tests',

@@ -33,7 +33,8 @@ class SuiteConfig(AgentConfig):
         'features',
         'static_connection',
         'active_logs',
-        'log_level'
+        'log_level',
+        'endpoint'
     )
 
     SCHEMA = {
@@ -45,7 +46,8 @@ class SuiteConfig(AgentConfig):
             'endpoint': str
         },
         'active_logs': [str],
-        'log_level': int
+        'log_level': int,
+        'endpoint': str
     }
 
     def apply(self):
