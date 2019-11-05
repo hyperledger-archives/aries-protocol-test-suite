@@ -1,8 +1,0 @@
-[config]
-wallet = 'test'
-passphrase = 'test'
-log_level = 10
-
-[[config.transport]]
-name = 'http'
-options = {port = 3000}
