@@ -1,19 +1,9 @@
 ## Aries Protocol Test Suite Sample Configuration ##
 
 [config]
-# The default name used for wallets created by the test agent.
-wallet = "testing-agent"
+host = "localhost"
+port = 3000
 
-# Passphrase of wallet
-passphrase = "test"
-
-# Specify whether wallets should be ephemeral
-ephemeral = true
-
-# Endpoint used in connections
-endpoint = "http://localhost:3000/"
-
-# A list of features or protocols to test.
 features = [
     "connection.manual",
     #"simple"
@@ -21,68 +11,5 @@ features = [
     #"trustping.manual"
 ]
 
-# Transports to run
-[[config.transport]]
-name = 'http'
-options = {port = 3000}
-
-# More transports can be started by including more transport blocks:
-# [[config.transport]]
-# name = 'ws'
-# options = {port = 3001}
-
-# Uncommenting this block would start a WebSocket transport on port 3001.
-# However, please note that an "http+ws" transport is included in the test
-# suite, removing any need to run both an "http" and "ws" transport at the same
-# time.
-
-# Four different transports are included in the test suite (with potential to
-# easily add more as needs are identified):
-
-# "http" - the same transport as included in this configuration. Accepts
-# messages as POSTs to http://<hostname>:<port>/
-
-# "ws" - A WebSocket transport, as shown in the commented out example above.
-# This transport will accept WebSocket connections at http://<hostname>:<port>/
-
-# "http+ws" - A Combined http and ws transport, running one server to accept
-# POSTs and WebSocket connections.
-
-# "std" - A transport that reads messages from Standard In and writes messages
-# to Standard Out. This is mostly included for demonstration purposes and likely
-# will not work with the current testing setup.
-
-[config.logging]
-
-# NOTE:
-# There are some bugs in logging that still need to be sorted out. To get logs
-# from the agent core and from the SDK used by the test suite, use
-# --log-cli-level to set the logging output through pytest.
-
-active_logs = [
-#'protocol_tests',
-#'indy'
-]
-
-# Set the default log level
-# Logs from both the tests and indy-sdk will be visible
-
-# Level            | Numeric value
-#------------------|----------------
-# CRITICAL         | 50
-# ERROR            | 40
-# WARNING          | 30
-# INFO             | 20
-# DEBUG            | 10
-# (INDY-SDK) TRACE | 5
-# NOTSET           | 0
-log_level = 30
-
-
-[config.static_connection]
-# Set these configuration options if you want to run the "simple_messaging"
-# tests found in protocol_tests/test_simple_messaging.py
-
-did="<did of static agent>"
-verkey="<verkey of static agent>"
-endpoint="<url of static agent endpoint>"
+[config.subject]
+endpoint="http://localhost:3001"

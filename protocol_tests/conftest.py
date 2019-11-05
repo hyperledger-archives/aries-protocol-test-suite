@@ -11,11 +11,12 @@ import json
 import os
 
 import pytest
-from agent_core.compat import create_task
-from . import TestingAgent
+from aiohttp import web
+
+from config import load_config
+from . import ChannelManager
 
 # pylint: disable=redefined-outer-name
-
 
 @pytest.fixture(scope='session')
 def event_loop():
@@ -33,16 +34,40 @@ def config(pytestconfig):
     """
     yield pytestconfig.suite_config
 
-    # TODO: Cleanup?
+@pytest.fixture(scope='session')
+def channel_manager(config):
+    """Get channel manager for test suite."""
+    manager = ChannelManager(config['subject']['endpoint'])
+    yield manager
+
+@pytest.fixture(scope='session')
+async def http_endpoint(config, channel_manager):
+    """Create http server task."""
+
+    async def handle(request):
+        """aiohttp handle POST."""
+        response = []
+        with channel_manager.reply_handler(response.append):
+            await channel_manager.handle(await request.read())
+
+        if response:
+            return web.Response(body=response.pop())
+
+        raise web.HTTPAccepted()
+
+    app = web.Application()
+    app.router.add_post('/', handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, config['host'], config['port'])
+    server_task = asyncio.ensure_future(site.start())
+    yield
+    server_task.cancel()
+    await server_task
+    await runner.cleanup()
 
 
 @pytest.fixture(scope='session')
-async def agent(config):
-    """ The persistent agent used by the test suite to test other agents """
-    test_suite_agent = await TestingAgent.from_config_async(config)
-    task = create_task(test_suite_agent.start())
-
-    yield test_suite_agent
-
-    await test_suite_agent.shutdown()
-    task.cancel()
+def backchannel(http_endpoint, channel_manager): # pylint: disable=unused-argument
+    """Get backchannel to test subject."""
+    yield channel_manager.backchannel

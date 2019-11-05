@@ -12,6 +12,7 @@ from _pytest.terminal import TerminalReporter
 import toml
 from schema import Optional
 
+from config import load_config, default
 from agent_core import AgentConfig
 
 
@@ -102,9 +103,10 @@ def pytest_configure(config):
         config_path
     )
 
-    config.suite_config = SuiteConfig.from_options(
-        toml.load(config_path)['config']
-    )
+    try:
+        config.suite_config = load_config(config_path)
+    except FileNotFoundError:
+        config.suite_config = default()
 
     # register additional markers
     config.addinivalue_line(
@@ -125,9 +127,10 @@ def pytest_configure(config):
     # Compile SELECT_REGEX if given
     select_regex = config.getoption('select')
     config.select_regex = re.compile(select_regex) if select_regex else None
+    config.features = config.suite_config['features']
 
 
-def pytest_collection_modifyitems(items):
+def pytest_collection_modifyitems(session, config, items):
     """ Select tests based on config or args. """
     if not items:
         return
@@ -138,7 +141,7 @@ def pytest_collection_modifyitems(items):
         ]
         feature_names = [item for sublist in feature_names for item in sublist]
         if feature_names:
-            for selected_test in item.config.suite_config.features:
+            for selected_test in config.features:
                 if selected_test in feature_names:
                     item.selected_feature = selected_test
                     return True
@@ -151,7 +154,7 @@ def pytest_collection_modifyitems(items):
         ]
         feature_names = [item for sublist in feature_names for item in sublist]
         for feature in feature_names:
-            if item.config.select_regex.match(feature):
+            if config.select_regex.match(feature):
                 item.selected_feature = feature
                 return True
 
@@ -170,10 +173,11 @@ def pytest_collection_modifyitems(items):
     def priority_sort(item):
         return item.priority
 
-    if items[0].config.select_regex:
-        filtered_items = filter(regex_feature_filter, items)
-    else:
-        filtered_items = filter(feature_filter, items)
+    filtered_items = items
+    if config.select_regex:
+        filtered_items = filter(regex_feature_filter, filtered_items)
+    if config.features:
+        filtered_items = filter(feature_filter, filtered_items)
 
     priority_mapped_items = map(feature_priority_map, filtered_items)
     items[:] = sorted(priority_mapped_items, key=priority_sort, reverse=True)

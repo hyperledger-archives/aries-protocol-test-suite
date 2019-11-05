@@ -3,59 +3,19 @@ import asyncio
 # import logging
 
 import pytest
-from ariespython import did
 
-from agent_core.message import Message
-from agent_core.mtc import (
-    AUTHENTICATED_ORIGIN,
-    CONFIDENTIALITY,
-    DESERIALIZE_OK,
-    INTEGRITY,
-    NONREPUDIATION
+from aries_staticagent import Message, crypto
+from aries_staticagent.mtc import (
+    CONFIDENTIALITY, INTEGRITY, AUTHENTICATED_ORIGIN,
+    DESERIALIZE_OK, NONREPUDIATION
 )
 from . import MessageSchema
 
 
-async def static_connection(agent, static_connection_info):
-    """ Set up connection to static agent """
-    their_did = static_connection_info['did']
-    their_vk = static_connection_info['verkey']
-    their_endpoint = static_connection_info['endpoint']
-
-    await did.store_their_did(
-        agent.wallet_handle,
-        {
-            'did': their_did,
-            'verkey': their_vk
-        }
-    )
-    await did.set_did_metadata(
-        agent.wallet_handle,
-        their_did,
-        {
-            'service': {
-                'serviceEndpoint': their_endpoint
-            }
-        }
-    )
-    await did.map_key_to_did(agent.wallet_handle, their_vk, their_did)
-
-    my_did, my_vk = await did.create_and_store_my_did(
-        agent.wallet_handle,
-        {'seed': '00000000000000000000000000000000'}
-    )
-    await did.map_key_to_did(agent.wallet_handle, my_vk, my_did)
-
-    return my_did, my_vk, their_did, their_vk
-
-
 @pytest.mark.asyncio
 @pytest.mark.features('simple')
-async def test_simple_messaging(config, agent):
-    """ Show simple messages being passed to and from tested agent """
-
-    _my_did, my_vk, their_did, their_vk = \
-        await static_connection(agent, config['static_connection'])
+async def test_simple_messaging(backchannel):
+    """ Show simple messages being passed to and from the test subject """
 
     expected_schema = MessageSchema({
         '@type': 'test/protocol/1.0/test',
@@ -68,22 +28,18 @@ async def test_simple_messaging(config, agent):
         'msg': 'ping'
     })
     print('Sending message:', ping.pretty_print())
-    await agent.send(
+    pong = await backchannel.send_and_await_reply_async(
         ping,
-        their_vk,
-        to_did=their_did,
-        from_vk=my_vk
+        timeout=1
     )
 
-    pong = await agent.expect_message('test/protocol/1.0/test', 1)
     print('Received message:', pong.pretty_print())
 
     assert pong.mtc[
         CONFIDENTIALITY | INTEGRITY | AUTHENTICATED_ORIGIN | DESERIALIZE_OK
     ]
     assert not pong.mtc[NONREPUDIATION]
-    assert pong.mtc.ad['sender_vk'] == their_vk
-    assert pong.mtc.ad['recip_vk'] == my_vk
+    assert pong.mtc.ad['sender_vk'] == crypto.bytes_to_b58(backchannel.their_vk)
+    assert pong.mtc.ad['recip_vk'] == crypto.bytes_to_b58(backchannel.my_vk)
 
     assert expected_schema.validate(pong)
-    assert agent.ok()
