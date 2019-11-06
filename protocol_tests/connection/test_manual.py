@@ -23,7 +23,7 @@ DIDDOC_SCHEMA = MessageSchema({
         "id": str,
         "type": "IndyAgent",
         "recipientKeys": [str],
-        "routingKeys": [str],
+        Optional("routingKeys"): [str],
         "serviceEndpoint": str,
     }],
 })
@@ -34,7 +34,7 @@ INVITE_SCHEMA = MessageSchema({
     '@id': str,
     'label': str,
     'recipientKeys': [str],
-    'routingKeys': [str],
+    Optional('routingKeys'): [str],
     'serviceEndpoint': str,
 })
 
@@ -261,11 +261,12 @@ async def test_connection_started_by_suite(config, temporary_channel):
         REQUEST_SCHEMA.validate(request)
         print("\nReceived request:\n", request.pretty_print())
 
-        (_, conn.their_vk, conn.endpoint) = (
+        (_, conn.their_vk_b58, conn.endpoint) = (
             request['connection']['DIDDoc']['publicKey'][0]['controller'],
             request['connection']['DIDDoc']['publicKey'][0]['publicKeyBase58'],
             request['connection']['DIDDoc']['service'][0]['serviceEndpoint']
         )
+        conn.their_vk = crypto.b58_to_bytes(conn.their_vk_b58)
 
         conn.my_vk, conn.my_sk = crypto.create_keypair()
         conn.did = crypto.bytes_to_b58(conn.my_vk[:16])
@@ -274,8 +275,8 @@ async def test_connection_started_by_suite(config, temporary_channel):
         response = build_response(
             request.id,
             conn.did,
-            conn.my_vk,
-            config.endpoint
+            conn.my_vk_b58,
+            config['endpoint']
         )
 
         print(
