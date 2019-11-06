@@ -118,6 +118,11 @@ class Report:
 
         return json.dumps(self.make_report)
 
+    def save(self, path):
+        """Save the test report out to a file."""
+        with open(path, 'w') as out_file:
+            json.dump(self.make_report(), out_file, indent=2)
+
 
 class ReportSingleton:
     """Singleton for Report object."""

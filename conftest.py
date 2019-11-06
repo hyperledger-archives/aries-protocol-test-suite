@@ -53,6 +53,14 @@ def pytest_addoption(parser):
         help='Run tests matching SELECT_REGEX. '
         'Overrides tests selected in configuration.'
     )
+    group.addoption(
+        "-O",
+        "--output",
+        dest="save_path",
+        action="store",
+        metavar="PATH",
+        help="Save interop profile to PATH."
+    )
 
 
 @pytest.hookimpl(trylast=True)
@@ -71,6 +79,7 @@ def pytest_configure(config):
         config.suite_config = load_config(config_path)
     except FileNotFoundError:
         config.suite_config = default()
+    config.suite_config['save_path'] = config.getoption('save_path')
 
     # register additional markers
     config.addinivalue_line(
@@ -190,6 +199,9 @@ def report(config):
     """Report fixture."""
     report_instance = ReportSingleton(config)
     yield report_instance
+    save_path = config.get('save_path')
+    if save_path:
+        report_instance.save(save_path)
 
 
 @pytest.fixture
