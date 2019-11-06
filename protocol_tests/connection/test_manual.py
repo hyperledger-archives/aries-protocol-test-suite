@@ -4,11 +4,10 @@ import re
 import base64
 import uuid
 
-from ariespython import did
 from schema import Optional
 import pytest
 
-from agent_core.message import Message
+from aries_staticagent import StaticConnection, Message, crypto
 from .. import MessageSchema
 
 DIDDOC_SCHEMA = MessageSchema({
