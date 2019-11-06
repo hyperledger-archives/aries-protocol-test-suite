@@ -59,24 +59,27 @@ class TestReport:
 
     def flatten(self):
         """Flatten this TestReport object into dictionary."""
-        return {
-            'name': ','.join([
-                self.function.protocol,
-                self.function.version,
-                self.function.role,
-                self.function.name
-            ]),
-            'description': self.function.description,
-            'pass': self.report.outcome == 'passed',
-            'info': self.report.longrepr,
-            'warnings': list(map(
-                lambda warning: {
-                    'message': warning.message,
-                    'category': warning.category.__name__
-                },
-                self.warnings
-            )),
-        }
+        return dict(filter(
+            lambda item: bool(item[1]),
+            {
+                'name': ','.join([
+                    self.function.protocol,
+                    self.function.version,
+                    self.function.role,
+                    self.function.name
+                ]),
+                'description': self.function.description,
+                'pass': self.report.outcome == 'passed',
+                'info': self.report.longrepr,
+                'warnings': list(map(
+                    lambda warning: {
+                        'message': warning.message,
+                        'category': warning.category.__name__
+                    },
+                    self.warnings
+                )),
+            }.items()
+        ))
 
 
 class Report:
