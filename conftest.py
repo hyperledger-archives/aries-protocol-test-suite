@@ -5,12 +5,9 @@ import os
 import sys
 import time
 import re
-import logging
 
 import pytest
 from _pytest.terminal import TerminalReporter
-import toml
-from schema import Optional
 
 from config import load_config, default
 from reporting import ReportSingleton, TestFunction, TestReport
@@ -162,7 +159,10 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    setattr(item, "report_" + report.when, report)
+    if not hasattr(item, 'reports'):
+        setattr(item, 'reports', {})
+    item.reports[report.when] = report
+    # setattr(item, "report_" + report.when, report)
 
     term_reporter = item.config.pluginmanager.get_plugin('terminalreporter')
     if report.when == 'call' and report.failed:
@@ -187,6 +187,7 @@ def pytest_runtest_makereport(item, call):
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Write Interop Profile to terminal summary."""
     terminalreporter.write('\n')
     terminalreporter.write_sep('=', 'Interop Profile', bold=True, yellow=True)
     terminalreporter.write('\n')
@@ -208,6 +209,11 @@ def report(config):
 def report_on_test(request, recwarn, report):
     """Universally loaded fixture for getting test reports."""
     yield
+    passed = False
+    if hasattr(request.node, 'report_call') and \
+            request.node.report_call.outcome == 'passed':
+        passed = True
+
     report.add_report(
         TestReport(
             TestFunction(
@@ -217,7 +223,7 @@ def report_on_test(request, recwarn, report):
                 name=request.function.name,
                 description=request.function.__doc__
             ),
-            request.node.report_call,
+            passed,
             recwarn.list
         )
     )
