@@ -177,7 +177,7 @@ def build_response(
 @pytest.mark.features("core.manual", "connection.manual")
 @pytest.mark.priority(10)
 @pytest.mark.asyncio
-async def test_connection_started_by_tested_agent(config, agent):
+async def test_connection_started_by_tested_agent(config, temporary_channel):
     """ Test a connection as started by the agent under test """
     invite_url = input('Input generated connection invite: ')
 
@@ -186,100 +186,112 @@ async def test_connection_started_by_tested_agent(config, agent):
     print("\nReceived Invite:\n", invite_msg.pretty_print())
 
     # Create my information for connection
-    (my_did, my_vk) = await did.create_and_store_my_did(
-        agent.wallet_handle,
-        {}
-    )
+    with temporary_channel(
+            invite_msg['recipientKeys'][0],
+            invite_msg['serviceEndpoint']) as conn:
 
-    # Send Connection Request to inviter
-    request = build_request(
-        'test-connection-started-by-tested-agent',
-        my_did,
-        my_vk,
-        config.endpoint
-    )
+        did = crypto.bytes_to_b58(conn.my_vk[:16])
+        my_vk_b58 = crypto.bytes_to_b58(conn.my_vk)
 
-    print("\nSending Request:\n", request.pretty_print())
+        # Send Connection Request to inviter
+        request = build_request(
+            'test-connection-started-by-tested-agent',
+            did,
+            my_vk_b58,
+            config['endpoint']
+        )
 
-    await agent.send(
-        request,
-        invite_msg['recipientKeys'][0],
-        from_key=my_vk,
-        service={'serviceEndpoint': invite_msg['serviceEndpoint']}
-    )
+        print("\nSending Request:\n", request.pretty_print())
+        print("Awaiting response from tested agent...")
+        response = await conn.send_and_await_reply_async(
+            request,
+            condition=lambda msg: msg.type == RESPONSE,
+            timeout=30
+        )
 
-    # Wait for response
-    print("Awaiting response from tested agent...")
-    response = await agent.expect_message(RESPONSE, 30)
+        RESPONSE_SCHEMA_PRE_SIG_VERIFY.validate(response)
+        print(
+            "\nReceived Response (pre signature verification):\n",
+            response.pretty_print()
+        )
 
-    RESPONSE_SCHEMA_PRE_SIG_VERIFY.validate(response)
-    print(
-        "\nReceived Response (pre signature verification):\n",
-        response.pretty_print()
-    )
+        signer, response['connection'] = \
+            crypto.verify_signed_message_field(response['connection~sig'])
+        assert signer == invite_msg['recipientKeys'][0], 'Unexpected signer'
+        del response['connection~sig']
 
-    response['connection'] = \
-        await agent.verify_signed_field(response['connection~sig'])
-    del response['connection~sig']
+        RESPONSE_SCHEMA_POST_SIG_VERIFY.validate(response)
+        assert response['~thread']['thid'] == request.id
 
-    RESPONSE_SCHEMA_POST_SIG_VERIFY.validate(response)
-    assert response['~thread']['thid'] == request.id
+        print(
+            "\nReceived Response (post signature verification):\n",
+            response.pretty_print()
+        )
 
-    print(
-        "\nReceived Response (post signature verification):\n",
-        response.pretty_print()
-    )
+        # To send more messages, update conn's their_vk and endpoint
+        # to those disclosed in the response.
 
 
 @pytest.mark.features("core.manual", "connection.manual")
 @pytest.mark.priority(10)
 @pytest.mark.asyncio
-async def test_connection_started_by_suite(config, agent):
+async def test_connection_started_by_suite(config, temporary_channel):
     """ Test a connection as started by the suite. """
-    label = 'test-suite-connection-started-by-suite'
 
-    connection_key = await did.create_key(agent.wallet_handle, {})
+    with temporary_channel() as conn:
+        invite_str = build_invite(
+            'test-suite-connection-started-by-suite',
+            conn.my_vk_b58,
+            config['endpoint']
+        )
 
-    invite_str = build_invite(label, connection_key, config.endpoint)
+        print('Encoding invitation:', parse_invite(invite_str))
 
-    print("\n\nInvitation encoded as URL: ", invite_str)
+        print("\n\nInvitation encoded as URL: ", invite_str)
 
-    print("Awaiting request from tested agent...")
-    request = await agent.expect_message(REQUEST, 30)
+        print("Awaiting request from tested agent...")
+        def condition(msg):
+            print(msg)
+            return msg.type == REQUEST
+        request = await conn.await_message(
+            condition=condition,
+            timeout=30
+        )
 
-    REQUEST_SCHEMA.validate(request)
-    print("\nReceived request:\n", request.pretty_print())
+        REQUEST_SCHEMA.validate(request)
+        print("\nReceived request:\n", request.pretty_print())
 
-    (_, their_vk, their_endpoint) = (
-        request['connection']['DIDDoc']['publicKey'][0]['controller'],
-        request['connection']['DIDDoc']['publicKey'][0]['publicKeyBase58'],
-        request['connection']['DIDDoc']['service'][0]['serviceEndpoint']
-    )
+        (_, conn.their_vk, conn.endpoint) = (
+            request['connection']['DIDDoc']['publicKey'][0]['controller'],
+            request['connection']['DIDDoc']['publicKey'][0]['publicKeyBase58'],
+            request['connection']['DIDDoc']['service'][0]['serviceEndpoint']
+        )
 
-    (my_did, my_vk) = await did.create_and_store_my_did(
-        agent.wallet_handle,
-        {}
-    )
+        conn.my_vk, conn.my_sk = crypto.create_keypair()
+        conn.did = crypto.bytes_to_b58(conn.my_vk[:16])
+        conn.my_vk_b58 = crypto.bytes_to_b58(conn.my_vk)
 
-    response = build_response(request.id, my_did, my_vk, config.endpoint)
-    print(
-        "\nSending Response (pre signature packing):\n",
-        response.pretty_print()
-    )
+        response = build_response(
+            request.id,
+            conn.did,
+            conn.my_vk,
+            config.endpoint
+        )
 
-    response['connection~sig'] = await agent.sign_field(
-        connection_key,
-        response['connection']
-    )
-    del response['connection']
-    print(
-        "\nSending Response (post signature packing):\n",
-        response.pretty_print()
-    )
+        print(
+            "\nSending Response (pre signature packing):\n",
+            response.pretty_print()
+        )
 
-    await agent.send(
-        response,
-        their_vk,
-        from_key=my_vk,
-        service={'serviceEndpoint': their_endpoint}
-    )
+        response['connection~sig'] = crypto.sign_message_field(
+            response['connection'],
+            signer=conn.my_vk_b58,
+            secret=conn.my_sk
+        )
+        del response['connection']
+        print(
+            "\nSending Response (post signature packing):\n",
+            response.pretty_print()
+        )
+
+        await conn.send_async(response)
