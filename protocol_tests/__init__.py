@@ -36,8 +36,6 @@ def _recipients_from_packed_message(packed_message: bytes) -> Iterable[str]:
     except Exception as err:
         raise ValueError("Invalid packed message recipients") from err
 
-    print(recips_outer)
-
     return map(lambda recip: recip['header']['kid'], recips_outer['recipients'])
 
 
@@ -86,10 +84,7 @@ class ChannelManager(StaticConnection):
         Route an incoming message to self (the backchannel) or to the
         appropriate frontchannels.
         """
-        for recipient in map(
-                crypto.b58_to_bytes,
-                _recipients_from_packed_message(packed_message)):
-
+        for recipient in _recipients_from_packed_message(packed_message):
             if recipient == self.test_suite_vk:
                 await super().handle(packed_message)
             if recipient in self.frontchannels:
@@ -97,8 +92,6 @@ class ChannelManager(StaticConnection):
 
     def new_frontchannel(
             self,
-            fc_vk: Union[bytes, str],
-            fc_sk: Union[bytes, str],
             their_vk: Union[bytes, str],
             endpoint: str) -> StaticConnection:
         """
@@ -113,33 +106,29 @@ class ChannelManager(StaticConnection):
         Returns:
             Returns the new front channel (static connection).
         """
+        fc_vk, fc_sk = crypto.create_keypair()
         new_fc = StaticConnection(
             fc_vk,
             fc_sk,
             their_vk,
             endpoint
         )
-
-        if isinstance(fc_vk, bytes):
-            # Ensure fc_vk is b58 string
-            fc_vk = crypto.bytes_to_b58(fc_vk)
-
-        self.frontchannels[fc_vk] = new_fc
+        frontchannel_index = crypto.bytes_to_b58(fc_vk)
+        self.frontchannels[frontchannel_index] = new_fc
         return new_fc
 
     def add_frontchannel(self, connection: StaticConnection):
         """Add an already created connection as a frontchannel."""
-        self.frontchannels[connection.my_vk] = connection
+        frontchannel_index = crypto.bytes_to_b58(connection.my_vk)
+        self.frontchannels[frontchannel_index] = connection
 
-    def remove_frontchannel(self, fc_vk: Union[bytes, str]):
+    def remove_frontchannel(self, connection: StaticConnection):
         """
         Remove a frontchannel.
 
         Args:
             fc_vk: The frontchannel's verification key
         """
-        if isinstance(fc_vk, bytes):
-            # Ensure fc_vk is b58 string
-            fc_vk = crypto.bytes_to_b58(fc_vk)
+        fc_vk = crypto.bytes_to_b58(connection.my_vk)
         if fc_vk in self.frontchannels:
             del self.frontchannels[fc_vk]
