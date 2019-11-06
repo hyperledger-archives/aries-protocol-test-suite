@@ -1,5 +1,5 @@
 aiohttp
-aries-staticagent
+aries-staticagent==0.5.1
 pytest
 pytest-asyncio
 schema
