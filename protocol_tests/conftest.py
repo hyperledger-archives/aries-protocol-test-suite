@@ -9,11 +9,11 @@
 import asyncio
 import json
 import os
+from contextlib import suppress
 
 import pytest
 from aiohttp import web
 
-from config import load_config
 from . import ChannelManager
 
 # pylint: disable=redefined-outer-name
@@ -63,7 +63,8 @@ async def http_endpoint(config, channel_manager):
     server_task = asyncio.ensure_future(site.start())
     yield
     server_task.cancel()
-    await server_task
+    with suppress(asyncio.CancelledError):
+        await server_task
     await runner.cleanup()
 
 

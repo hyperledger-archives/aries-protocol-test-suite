@@ -153,13 +153,21 @@ def pytest_runtest_makereport(item, call):
     report = outcome.get_result()
     term_reporter = item.config.pluginmanager.get_plugin('terminalreporter')
     if report.when == 'call' and report.failed:
-        term_reporter.write_sep(
-            '=',
-            'Failure! Feature: %s, Test: %s' % (
-                item.selected_feature,
-                item.name
-            ),
-            red=True,
-            bold=True
-        )
+        if hasattr(item, 'selected_feature'):
+            term_reporter.write_sep(
+                '=',
+                'Failure! Feature: %s, Test: %s' % (
+                    item.selected_feature,
+                    item.name
+                ),
+                red=True,
+                bold=True
+            )
+        else:
+            term_reporter.write_sep(
+                '=',
+                'Failure! Test: %s' % item.name,
+                red=True,
+                bold=True
+            )
         report.toterminal(term_reporter.writer)
