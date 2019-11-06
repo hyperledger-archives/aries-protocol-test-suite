@@ -159,10 +159,7 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    if not hasattr(item, 'reports'):
-        setattr(item, 'reports', {})
-    item.reports[report.when] = report
-    # setattr(item, "report_" + report.when, report)
+    setattr(item, "report_" + report.when, report)
 
     term_reporter = item.config.pluginmanager.get_plugin('terminalreporter')
     if report.when == 'call' and report.failed:

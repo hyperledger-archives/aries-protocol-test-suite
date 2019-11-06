@@ -113,7 +113,6 @@ class Report:
 
     def to_json(self, pretty_print=True) -> str:
         """Serialize report to string."""
-        print(self.make_report())
         if pretty_print:
             return json.dumps(self.make_report(), indent=2)
 
