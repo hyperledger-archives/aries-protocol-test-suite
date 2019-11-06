@@ -182,6 +182,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     terminalreporter.write_sep('=', 'Interop Profile', bold=True, yellow=True)
     terminalreporter.write('\n')
     terminalreporter.write(ReportSingleton(config.suite_config).to_json())
+    terminalreporter.write('\n')
 
 
 @pytest.fixture(scope='session')
