@@ -1,5 +1,6 @@
 """ Protocol Test Helpers """
 from typing import Dict, Iterable, Union
+from contextlib import contextmanager
 import hashlib
 import json
 
@@ -132,3 +133,13 @@ class ChannelManager(StaticConnection):
         fc_vk = crypto.bytes_to_b58(connection.my_vk)
         if fc_vk in self.frontchannels:
             del self.frontchannels[fc_vk]
+
+    @contextmanager
+    def temporary_channel(
+            self,
+            their_vk=None,
+            endpoint=None) -> StaticConnection:
+        """Use 'with' statement to use a temporary channel."""
+        channel = self.new_frontchannel(their_vk or b'', endpoint or '')
+        yield channel
+        self.remove_frontchannel(channel)

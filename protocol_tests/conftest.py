@@ -72,3 +72,8 @@ async def http_endpoint(config, channel_manager):
 def backchannel(http_endpoint, channel_manager): # pylint: disable=unused-argument
     """Get backchannel to test subject."""
     yield channel_manager.backchannel
+
+@pytest.fixture(scope='session')
+def temporary_channel(http_endpoint, channel_manager):
+    """Get contextmanager for using a temporary channel."""
+    yield channel_manager.temporary_channel
