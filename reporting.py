@@ -2,6 +2,7 @@
 import datetime
 import json
 from warnings import WarningMessage
+from collections import namedtuple
 
 import _pytest
 from setup import VERSION
@@ -46,21 +47,21 @@ class TestFunction:
 class TestReport:
     """Collection of information needed to report about a run test."""
 
-    __slots__ = ('function', 'report', 'warnings')
+    __slots__ = ('function', 'passed', 'warnings')
 
     def __init__(
             self,
             function: TestFunction,
-            report: _pytest.runner.TestReport,
+            passed: bool,
             warnings: [WarningMessage]):
         self.function = function
-        self.report = report
+        self.passed = passed
         self.warnings = warnings
 
     def flatten(self):
         """Flatten this TestReport object into dictionary."""
         return dict(filter(
-            lambda item: bool(item[1]),
+            lambda item: isinstance(item[1], bool) or bool(item[1]),
             {
                 'name': ','.join([
                     self.function.protocol,
@@ -69,8 +70,7 @@ class TestReport:
                     self.function.name
                 ]),
                 'description': self.function.description,
-                'pass': self.report.outcome == 'passed',
-                'info': self.report.longrepr,
+                'pass': self.passed,
                 'warnings': list(map(
                     lambda warning: {
                         'message': warning.message,
@@ -113,6 +113,7 @@ class Report:
 
     def to_json(self, pretty_print=True) -> str:
         """Serialize report to string."""
+        print(self.make_report())
         if pretty_print:
             return json.dumps(self.make_report(), indent=2)
 
