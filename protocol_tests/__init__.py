@@ -102,7 +102,7 @@ class ChannelManager(StaticConnection):
             their_vk: Union[bytes, str],
             endpoint: str) -> StaticConnection:
         """
-        Create a new frontchannel.
+        Create a new connection and add it as a frontchannel.
 
         Args:
             fc_vk: The new frontchannel's verification key
@@ -126,6 +126,10 @@ class ChannelManager(StaticConnection):
 
         self.frontchannels[fc_vk] = new_fc
         return new_fc
+
+    def add_frontchannel(self, connection: StaticConnection):
+        """Add an already created connection as a frontchannel."""
+        self.frontchannels[connection.my_vk] = connection
 
     def remove_frontchannel(self, fc_vk: Union[bytes, str]):
         """
