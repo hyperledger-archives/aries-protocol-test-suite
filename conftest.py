@@ -13,7 +13,6 @@ import toml
 from schema import Optional
 
 from config import load_config, default
-from agent_core import AgentConfig
 
 
 class AgentTerminalReporter(TerminalReporter):
@@ -27,42 +26,6 @@ class AgentTerminalReporter(TerminalReporter):
         line = self._locationline(nodeid, *location)
         self.write_sep('=', line, bold=True)
         self.write('\n')
-
-
-class SuiteConfig(AgentConfig):
-    """ Aries Protocol Test Suite Config class """
-    __slots__ = (
-        'endpoint',
-        'features',
-        'static_connection',
-        'logging',
-    )
-
-    SCHEMA = {
-        **AgentConfig.SCHEMA,
-        'endpoint': str,
-        'features': [str],
-        Optional('logging'): {
-            'active_logs': [str],
-            'log_level': int,
-        },
-        Optional('static_connection'): {
-            'did': str,
-            'verkey': str,
-            'endpoint': str
-        },
-    }
-
-    def apply(self):
-        super().apply()
-
-        # Apply logging configuration
-        if 'logging' in self:
-            logging.getLogger().setLevel(logging.WARNING)
-            for logger in self['logging']['active_logs']:
-                logging.getLogger(logger).setLevel(
-                    self['logging']['log_level']
-                )
 
 
 def pytest_addoption(parser):
