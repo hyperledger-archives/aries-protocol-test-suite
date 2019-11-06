@@ -1,6 +1,4 @@
 """ Demonstrate testing framework. """
-import asyncio
-# import logging
 
 import pytest
 
@@ -9,13 +7,15 @@ from aries_staticagent.mtc import (
     CONFIDENTIALITY, INTEGRITY, AUTHENTICATED_ORIGIN,
     DESERIALIZE_OK, NONREPUDIATION
 )
+from reporting import meta
 from . import MessageSchema
 
 
 @pytest.mark.asyncio
 @pytest.mark.features('simple')
+@meta(protocol='simple', version='0.1', role='*', name='simple')
 async def test_simple_messaging(backchannel):
-    """ Show simple messages being passed to and from the test subject """
+    """Show simple messages being passed to and from the test subject."""
 
     expected_schema = MessageSchema({
         '@type': 'test/protocol/1.0/test',

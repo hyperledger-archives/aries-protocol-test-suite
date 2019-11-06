@@ -13,6 +13,7 @@ import toml
 from schema import Optional
 
 from config import load_config, default
+from reporting import ReportSingleton, TestFunction, TestReport
 
 
 class AgentTerminalReporter(TerminalReporter):
@@ -151,6 +152,9 @@ def pytest_runtest_makereport(item, call):
     """ Customize reporting """
     outcome = yield
     report = outcome.get_result()
+
+    setattr(item, "report_" + report.when, report)
+
     term_reporter = item.config.pluginmanager.get_plugin('terminalreporter')
     if report.when == 'call' and report.failed:
         if hasattr(item, 'selected_feature'):
@@ -171,3 +175,36 @@ def pytest_runtest_makereport(item, call):
                 bold=True
             )
         report.toterminal(term_reporter.writer)
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    terminalreporter.write('\n')
+    terminalreporter.write_sep('=', 'Interop Profile', bold=True, yellow=True)
+    terminalreporter.write('\n')
+    terminalreporter.write(ReportSingleton(config.suite_config).to_json())
+
+
+@pytest.fixture(scope='session')
+def report(config):
+    """Report fixture."""
+    report_instance = ReportSingleton(config)
+    yield report_instance
+
+
+@pytest.fixture
+def report_on_test(request, recwarn, report):
+    """Universally loaded fixture for getting test reports."""
+    yield
+    report.add_report(
+        TestReport(
+            TestFunction(
+                protocol=request.function.protocol,
+                version=request.function.version,
+                role=request.function.role,
+                name=request.function.name,
+                description=request.function.__doc__
+            ),
+            request.node.report_call,
+            recwarn.list
+        )
+    )
