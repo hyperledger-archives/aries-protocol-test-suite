@@ -2,7 +2,7 @@ aiohttp
 aries-staticagent==0.5.1
 pytest
 pytest-asyncio
-schema
+voluptuous
 semver
 sortedcontainers
 toml

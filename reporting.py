@@ -73,7 +73,7 @@ class TestReport:
                 'pass': self.passed,
                 'warnings': list(map(
                     lambda warning: {
-                        'message': warning.message,
+                        'message': str(warning.message),
                         'category': warning.category.__name__
                     },
                     self.warnings
