@@ -8,6 +8,7 @@ import pytest
 
 from aries_staticagent import Message, crypto
 from voluptuous import Schema, Optional
+from reporting import meta
 from .. import MessageSchema
 
 DIDDOC_SCHEMA = Schema({
@@ -49,7 +50,6 @@ REQUEST_SCHEMA = MessageSchema({
     }
 })
 
-
 RESPONSE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/connections/1.0/response'
 RESPONSE_SCHEMA_PRE_SIG_VERIFY = MessageSchema({
     '@type': RESPONSE,
@@ -87,6 +87,7 @@ def parse_invite(invite_url: str) -> Message:
     INVITE_SCHEMA(invite_msg)
 
     return invite_msg
+
 
 def build_invite(label: str, connection_key: str, endpoint: str) -> str:
     msg = Message({
@@ -177,8 +178,9 @@ def build_response(
 @pytest.mark.features("core.manual", "connection.manual")
 @pytest.mark.priority(10)
 @pytest.mark.asyncio
+@meta(protocol='connections', version='1.0', role='inviter', name='can-start')
 async def test_connection_started_by_tested_agent(config, temporary_channel):
-    """ Test a connection as started by the agent under test """
+    """Test a connection as started by the agent under test."""
     invite_url = input('Input generated connection invite: ')
 
     invite_msg = parse_invite(invite_url)
@@ -235,6 +237,7 @@ async def test_connection_started_by_tested_agent(config, temporary_channel):
 @pytest.mark.features("core.manual", "connection.manual")
 @pytest.mark.priority(10)
 @pytest.mark.asyncio
+@meta(protocol='connections', version='1.0', role='invitee', name='can-receive')
 async def test_connection_started_by_suite(config, temporary_channel):
     """ Test a connection as started by the suite. """
 

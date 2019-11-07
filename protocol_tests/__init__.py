@@ -166,7 +166,7 @@ class ChannelManager(StaticConnection):
         appropriate frontchannels.
         """
         for recipient in _recipients_from_packed_message(packed_message):
-            if recipient == self.test_suite_vk:
+            if recipient == self.my_vk_b58:
                 await super().handle(packed_message)
             if recipient in self.frontchannels:
                 await self.frontchannels[recipient].handle(packed_message)
