@@ -4,13 +4,13 @@ import re
 import base64
 import uuid
 
-from schema import Optional
 import pytest
 
-from aries_staticagent import StaticConnection, Message, crypto
+from aries_staticagent import Message, crypto
+from voluptuous import Schema, Optional
 from .. import MessageSchema
 
-DIDDOC_SCHEMA = MessageSchema({
+DIDDOC_SCHEMA = Schema({
     "@context": "https://w3id.org/did/v1",
     "id": str,
     "publicKey": [{
@@ -84,7 +84,7 @@ def parse_invite(invite_url: str) -> Message:
         base64.urlsafe_b64decode(matches.group(2)).decode('ascii')
     )
 
-    INVITE_SCHEMA.validate(invite_msg)
+    INVITE_SCHEMA(invite_msg)
 
     return invite_msg
 
@@ -209,7 +209,7 @@ async def test_connection_started_by_tested_agent(config, temporary_channel):
             timeout=30
         )
 
-        RESPONSE_SCHEMA_PRE_SIG_VERIFY.validate(response)
+        RESPONSE_SCHEMA_PRE_SIG_VERIFY(response)
         print(
             "\nReceived Response (pre signature verification):\n",
             response.pretty_print()
@@ -220,7 +220,7 @@ async def test_connection_started_by_tested_agent(config, temporary_channel):
         assert signer == invite_msg['recipientKeys'][0], 'Unexpected signer'
         del response['connection~sig']
 
-        RESPONSE_SCHEMA_POST_SIG_VERIFY.validate(response)
+        RESPONSE_SCHEMA_POST_SIG_VERIFY(response)
         assert response['~thread']['thid'] == request.id
 
         print(
@@ -258,7 +258,7 @@ async def test_connection_started_by_suite(config, temporary_channel):
             timeout=30
         )
 
-        REQUEST_SCHEMA.validate(request)
+        REQUEST_SCHEMA(request)
         print("\nReceived request:\n", request.pretty_print())
 
         (_, conn.their_vk_b58, conn.endpoint) = (
