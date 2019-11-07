@@ -8,7 +8,7 @@ from aries_staticagent.mtc import (
     DESERIALIZE_OK, NONREPUDIATION
 )
 from reporting import meta
-from . import MessageSchema
+from .schema import MessageSchema
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,7 @@ import pytest
 from aries_staticagent import Message, crypto
 from voluptuous import Schema, Optional
 from reporting import meta
-from .. import MessageSchema
+from ..schema import MessageSchema, Slot, fill_slots
 
 DIDDOC_SCHEMA = Schema({
     "@context": "https://w3id.org/did/v1",
