@@ -174,7 +174,7 @@ def _(value: Slot, key: Any = None, **values: Dict[str, Any]):
 
     if slot.default is not None:
         if callable(slot.default):
-            return slot.default(slot.name)
+            return slot.default(values)
         return slot.default
 
     raise KeyError(
