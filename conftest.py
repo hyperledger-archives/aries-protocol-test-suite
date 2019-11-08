@@ -42,8 +42,8 @@ def pytest_addoption(parser):
         help="Load suite configuration from SUITE_CONFIG",
     )
     group.addoption(
-        "-F",
-        "--feature-select",
+        "-S",
+        "--select",
         dest='select',
         action='store',
         metavar='SELECT_REGEX',
@@ -58,6 +58,13 @@ def pytest_addoption(parser):
         metavar="PATH",
         help="Save interop profile to PATH."
     )
+    group.addoption(
+        "-L",
+        "--list",
+        dest="list_tests",
+        action="store_true",
+        help="List available tests."
+    )
 
 
 @pytest.hookimpl(trylast=True)
@@ -68,7 +75,7 @@ def pytest_configure(config):
     config_path = 'config.toml' if not config_path else config_path
     config_path = os.path.join(dirname, config_path)
     print(
-        '\nLoading Agent Test Suite configuration from file: %s\n' %
+        '\nAttempting to load configuration from file: %s\n' %
         config_path
     )
 
@@ -78,79 +85,72 @@ def pytest_configure(config):
         config.suite_config = default()
     config.suite_config['save_path'] = config.getoption('save_path')
 
-    # register additional markers
-    config.addinivalue_line(
-        "markers", "features(name[, name, ...]):"
-        "Define what features the test belongs to."
-    )
-    config.addinivalue_line(
-        "markers", "priority(int): Define test priority for "
-        "ordering tests. Higher numbers occur first."
-    )
+    # Override default terminal reporter for better test output when not capturing
+    if config.getoption('capture') == 'no':
+        reporter = config.pluginmanager.get_plugin('terminalreporter')
+        agent_reporter = AgentTerminalReporter(config, sys.stdout)
+        config.pluginmanager.unregister(reporter)
+        config.pluginmanager.register(agent_reporter, 'terminalreporter')
 
-    # Override default terminal reporter for better test output
-    reporter = config.pluginmanager.get_plugin('terminalreporter')
-    agent_reporter = AgentTerminalReporter(config, sys.stdout)
-    config.pluginmanager.unregister(reporter)
-    config.pluginmanager.register(agent_reporter, 'terminalreporter')
-
-    # Compile SELECT_REGEX if given
+    # Compile select regex and test regex if given
     select_regex = config.getoption('select')
     config.select_regex = re.compile(select_regex) if select_regex else None
-    config.features = config.suite_config['features']
+    config.tests_regex = list(map(
+        re.compile, config.suite_config['tests']
+    ))
 
 
 def pytest_collection_modifyitems(session, config, items):
-    """ Select tests based on config or args. """
+    """Select tests based on config or args."""
+    # pylint: disable=protected-access
     if not items:
         return
 
-    def feature_filter(item):
-        feature_names = [
-            mark.args for mark in item.iter_markers(name="features")
-        ]
-        feature_names = [item for sublist in feature_names for item in sublist]
-        if feature_names:
-            for selected_test in config.features:
-                if selected_test in feature_names:
-                    item.selected_feature = selected_test
-                    return True
+    report = ReportSingleton(session.config.suite_config)
 
-        return False
-
-    def regex_feature_filter(item):
-        feature_names = [
-            mark.args for mark in item.iter_markers(name="features")
-        ]
-        feature_names = [item for sublist in feature_names for item in sublist]
-        for feature in feature_names:
-            if config.select_regex.match(feature):
-                item.selected_feature = feature
-                return True
-
-        return False
-
-    def feature_priority_map(item):
-        priorities = [
-            mark.args[0] for mark in item.iter_markers(name="priority")
-        ]
-        if priorities:
-            item.priority = sorted(priorities, reverse=True)[0]
-        else:
-            item.priority = 0
+    def add_to_report(item):
+        if callable(item._obj) and hasattr(item._obj, 'meta_set'):
+            func = item._obj
+            test_fn = TestFunction(
+                protocol=func.protocol,
+                version=func.version,
+                role=func.role,
+                name=func.name,
+                description=func.__doc__
+            )
+            item.meta_name = test_fn.flatten()['name']
+            report.add_test(test_fn)
         return item
 
-    def priority_sort(item):
-        return item.priority
+    def test_regex_filter(item):
+        for regex in config.tests_regex:
+            if regex.match(item.meta_name):
+                return True
+        return False
 
-    filtered_items = items
+    item_pipeline = map(add_to_report, items)
     if config.select_regex:
-        filtered_items = filter(regex_feature_filter, filtered_items)
-    if config.features:
-        filtered_items = filter(feature_filter, filtered_items)
+        item_pipeline = filter(
+            lambda item: bool(config.select_regex.match(item.meta_name)),
+            item_pipeline
+        )
+    elif config.tests_regex:
+        item_pipeline = filter(
+            test_regex_filter,
+            item_pipeline
+        )
 
-    priority_mapped_items = map(feature_priority_map, filtered_items)
-    items[:] = sorted(priority_mapped_items, key=priority_sort, reverse=True)
+    items[:] = list(item_pipeline)
+
+
+@pytest.hookimpl()
+def pytest_report_collectionfinish(config, startdir, items):
+    """Print available tests if option set."""
+    if config.getoption('list_tests'):
+        reporter = config.pluginmanager.get_plugin('terminalreporter')
+        reporter.write('\n')
+        reporter.write_sep('-', 'Available Tests', bold=False, yellow=True)
+        return ReportSingleton(config.suite_config).available_tests_json()
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
@@ -161,35 +161,17 @@ def pytest_runtest_makereport(item, call):
 
     setattr(item, "report_" + report.when, report)
 
-    term_reporter = item.config.pluginmanager.get_plugin('terminalreporter')
-    if report.when == 'call' and report.failed:
-        if hasattr(item, 'selected_feature'):
-            term_reporter.write_sep(
-                '=',
-                'Failure! Feature: %s, Test: %s' % (
-                    item.selected_feature,
-                    item.name
-                ),
-                red=True,
-                bold=True
-            )
-        else:
-            term_reporter.write_sep(
-                '=',
-                'Failure! Test: %s' % item.name,
-                red=True,
-                bold=True
-            )
-        report.toterminal(term_reporter.writer)
-
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """Write Interop Profile to terminal summary."""
-    terminalreporter.write('\n')
-    terminalreporter.write_sep('=', 'Interop Profile', bold=True, yellow=True)
-    terminalreporter.write('\n')
-    terminalreporter.write(ReportSingleton(config.suite_config).to_json())
-    terminalreporter.write('\n')
+    if not config.getoption('collectonly'):
+        terminalreporter.write('\n')
+        terminalreporter.write_sep(
+            '=', 'Interop Profile', bold=True
+        )
+        terminalreporter.write('\n')
+        terminalreporter.write(ReportSingleton(config.suite_config).to_json())
+        terminalreporter.write('\n')
 
 
 @pytest.fixture(scope='session')

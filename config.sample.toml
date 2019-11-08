@@ -5,11 +5,8 @@ host = "localhost"
 port = 3000
 endpoint = "http://localhost:3000"
 
-features = [
-    "connection.manual",
-    #"simple"
-    #"basicmessage.manual",
-    #"trustping.manual"
+tests = [
+    "connections*",
 ]
 
 [config.subject]

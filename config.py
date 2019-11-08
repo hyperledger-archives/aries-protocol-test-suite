@@ -1,3 +1,4 @@
+"""Test Suite config."""
 import toml
 
 
@@ -15,5 +16,5 @@ def default():
         'subject': {
             'endpoint': 'http://localhost:3001'
         },
-        'features': []
+        'tests': []
     }
