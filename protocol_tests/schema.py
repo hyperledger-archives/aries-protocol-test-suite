@@ -1,9 +1,8 @@
 """Schema helpers."""
-from functools import reduce, singledispatch
-from typing import Dict, Any
+from functools import reduce
 from warnings import warn
 
-from voluptuous import Schema, Optional
+from voluptuous import Schema
 from voluptuous.error import Invalid, MultipleInvalid
 
 
@@ -97,98 +96,3 @@ class MessageSchema():
                     raise ValidationError(error)
             else:
                 raise ValidationError(error)
-
-
-class Slot():
-    """
-    Mark a fillable 'slot' in a schema.
-
-    On validation, this will simply act as a validator for the given schema.
-    """
-    __slots__ = ('name', 'schema', 'default')
-
-    def __init__(
-            self,
-            name: str,
-            schema: Any,
-            *,
-            default: Any = None):
-        self.name = name
-        self.schema = Schema(schema)
-        self.default = default
-
-    def __call__(self, value):
-        return self.schema(value)
-
-
-@singledispatch
-def fill_slots(item, **values: Dict[str, Any]):
-    """Fill in slots in a structure."""
-    raise ValueError('Cannot fill slots in item of type {}'.format(type(item)))
-
-
-@fill_slots.register
-def _(item: dict, **values: Dict[str, Any]):
-    dest = {}
-    for key, value in item.items():
-        new_value = fill_value(value, key=key, **values)
-        if isinstance(key, Optional):
-            key = key.schema
-        if new_value is not None:
-            dest[key] = new_value
-    return dest
-
-
-@fill_slots.register
-def _(item: list, **values: Dict[str, Any]):
-    return list(map(lambda value: fill_value(value, **values), item))
-
-
-@fill_slots.register(MessageSchema)
-@fill_slots.register(Schema)
-def _(item, **values: Dict[str, Any]):
-    return fill_slots(item.schema, **values)
-
-
-@singledispatch
-def fill_value(value, _key: Any = None, **_values: Dict[str, Any]):
-    """Replace slots with given values."""
-    return value
-
-
-@fill_value.register
-def _(value: type, key: Any = None, **values: Dict[str, Any]):
-    raise ValueError('Value of primative type {} is invalid'.format(value))
-
-
-@fill_value.register
-def _(value: Slot, key: Any = None, **values: Dict[str, Any]):
-    if key and isinstance(key, Optional):
-        if value.name not in values and value.default is None:
-            return None
-
-    slot = value
-    # Validate input for slot
-    if slot.name in values:
-        return slot.schema(values[slot.name])
-
-    if slot.default is not None:
-        if callable(slot.default):
-            return slot.default(values)
-        return slot.default
-
-    raise KeyError(
-        'No value given for slot name {}'.format(slot.name)
-    )
-
-
-@fill_value.register(list)
-@fill_value.register(dict)
-def _(value, key: Any = None, **values: Dict[str, Any]):
-    return fill_slots(value, **values)
-
-
-@fill_value.register(MessageSchema)
-@fill_value.register(Schema)
-def _(value, key: Any = None, **values: Dict[str, Any]):
-    return fill_slots(value, **values)
