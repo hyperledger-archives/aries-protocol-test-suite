@@ -1,16 +1,23 @@
 ## Aries Protocol Test Suite Sample Configuration ##
 
 [config]
+# HTTP Server options
 host = "localhost"
 port = 3000
+
+# Endpoint reported to other agents
 endpoint = "http://localhost:3000"
 
-features = [
-    "connection.manual",
-    #"simple"
-    #"basicmessage.manual",
-    #"trustping.manual"
+# List of regular expressions used to select tests.
+# If a test name matches at least one regex in this list, it will be selected
+# for execution.
+tests = [
+    "connections*",
 ]
 
 [config.subject]
+# Name and version reported in interop profile
+name = "MyAgent"
+version = "1.0.0"
+# Endpoint used for backchannel
 endpoint="http://localhost:3001"

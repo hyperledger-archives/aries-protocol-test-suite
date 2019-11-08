@@ -17,6 +17,7 @@ def meta(
         name: str = None):
     """Set meta information about test functions."""
     def _meta(func):
+        func.meta_set = True
         func.protocol = protocol
         func.version = version
         func.role = role
@@ -43,6 +44,17 @@ class TestFunction:
         self.name = name
         self.description = description
 
+    def flatten(self):
+        return {
+            'name': ','.join([
+                self.protocol,
+                self.version,
+                self.role,
+                self.name
+            ]),
+            'description': self.description,
+        }
+
 
 class TestReport:
     """Collection of information needed to report about a run test."""
@@ -63,13 +75,7 @@ class TestReport:
         return dict(filter(
             lambda item: isinstance(item[1], bool) or bool(item[1]),
             {
-                'name': ','.join([
-                    self.function.protocol,
-                    self.function.version,
-                    self.function.role,
-                    self.function.name
-                ]),
-                'description': self.function.description,
+                **self.function.flatten(),
                 'pass': self.passed,
                 'warnings': list(map(
                     lambda warning: {
@@ -94,11 +100,16 @@ class Report:
         )
         self.under_test_name = config['subject'].get('name', '')
         self.under_test_version = config['subject'].get('version', '')
-        self.tests: [TestReport] = []
+        self.available_tests: [TestFunction] = []
+        self.test_reports: [TestReport] = []
 
     def add_report(self, report: TestReport):
-        """Append test report to tests list."""
-        self.tests.append(report)
+        """Append test report to test reports list."""
+        self.test_reports.append(report)
+
+    def add_test(self, test_fn: TestFunction):
+        """Append test function to available tests list."""
+        self.available_tests.append(test_fn)
 
     def make_report(self) -> dict:
         """Construct flat report dictionary."""
@@ -108,15 +119,29 @@ class Report:
             'under_test_name': self.under_test_name,
             'under_test_version': self.under_test_version,
             'test_time': self.test_time,
-            'results': list(map(lambda tr: tr.flatten(), self.tests))
+            'results': list(map(lambda tr: tr.flatten(), self.test_reports))
         }
+
+    def flatten_available_tests(self) -> dict:
+        """Return flattened list of available tests."""
+        return list(map(
+            lambda test_fn: test_fn.flatten(),
+            self.available_tests
+        ))
+
+    def available_tests_json(self, pretty_print=True) -> str:
+        """Serialize available tests to string."""
+        if pretty_print:
+            return json.dumps(self.flatten_available_tests(), indent=2)
+
+        return json.dumps(self.flatten_available_tests())
 
     def to_json(self, pretty_print=True) -> str:
         """Serialize report to string."""
         if pretty_print:
             return json.dumps(self.make_report(), indent=2)
 
-        return json.dumps(self.make_report)
+        return json.dumps(self.make_report())
 
     def save(self, path):
         """Save the test report out to a file."""
