@@ -140,7 +140,13 @@ def pytest_collection_modifyitems(session, config, items):
             item_pipeline
         )
 
-    items[:] = list(item_pipeline)
+    remaining = list(item_pipeline)
+    deselected = set(items) - set(remaining)
+
+    # Report the deselected items to pytest
+    config.hook.pytest_deselected(items=deselected)
+
+    items[:] = remaining
 
 
 @pytest.hookimpl()
