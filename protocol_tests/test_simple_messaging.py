@@ -12,7 +12,6 @@ from . import MessageSchema
 
 
 @pytest.mark.asyncio
-@pytest.mark.features('simple')
 @meta(protocol='simple', version='0.1', role='*', name='simple')
 async def test_simple_messaging(backchannel):
     """Show simple messages being passed to and from the test subject."""

@@ -175,8 +175,6 @@ def build_response(
     })
 
 
-@pytest.mark.features("core.manual", "connection.manual")
-@pytest.mark.priority(10)
 @pytest.mark.asyncio
 @meta(protocol='connections', version='1.0', role='inviter', name='can-start')
 async def test_connection_started_by_tested_agent(config, temporary_channel):
@@ -234,8 +232,6 @@ async def test_connection_started_by_tested_agent(config, temporary_channel):
         # to those disclosed in the response.
 
 
-@pytest.mark.features("core.manual", "connection.manual")
-@pytest.mark.priority(10)
 @pytest.mark.asyncio
 @meta(protocol='connections', version='1.0', role='invitee', name='can-receive')
 async def test_connection_started_by_suite(config, temporary_channel):
