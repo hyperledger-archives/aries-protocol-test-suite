@@ -235,7 +235,7 @@ async def test_connection_started_by_tested_agent(config, temporary_channel):
 @pytest.mark.asyncio
 @meta(protocol='connections', version='1.0', role='invitee', name='can-receive')
 async def test_connection_started_by_suite(config, temporary_channel):
-    """ Test a connection as started by the suite. """
+    """Test a connection as started by the suite."""
 
     with temporary_channel() as conn:
         invite_str = build_invite(

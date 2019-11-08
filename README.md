@@ -59,6 +59,11 @@ with:
 $ protocoltest
 ```
 
+To list available tests without running the test suite:
+```sh
+$ protocoltest --collect-only --list
+```
+
 Use `protocoltest --help` to see more options:
 ```
 Aries Protocol Test Suite Configuration:
