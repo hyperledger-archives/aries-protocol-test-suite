@@ -61,10 +61,10 @@ async def test_connection_started_by_tested_agent(config, temporary_channel):
 async def test_connection_started_by_suite(config, temporary_channel):
     """Test a connection as started by the suite."""
 
-    with temporary_channel() as conn:
+    with temporary_channel() as invite_conn:
         invite = Invite.make(
             'test-suite-connection-started-by-suite',
-            conn.my_vk_b58,
+            invite_conn.my_vk_b58,
             config['endpoint']
         )
         invite_url = invite.to_url()
@@ -72,22 +72,21 @@ async def test_connection_started_by_suite(config, temporary_channel):
         print("\n\nInvitation encoded as URL: ", invite_url)
 
         print("Awaiting request from tested agent...")
-        request = Request(await conn.await_message(
+        request = Request(await invite_conn.await_message(
             condition=lambda msg: msg.type == Request.TYPE,
             timeout=30
         ))
-
         request.validate()
         print("\nReceived request:\n", request.pretty_print())
 
-        # Update connection information with request info
-        _, conn.their_vk_b58, conn.endpoint = request.get_connection_info()
-        conn.their_vk = crypto.b58_to_bytes(conn.their_vk_b58)
+    # Drop invite connection by exiting "with" context (no longer listening for
+    # messages with key matching invitation key).
 
-        # Update connection relationship keys (replacing invite keys)
-        conn.my_vk, conn.my_sk = crypto.create_keypair()
-        conn.did = crypto.bytes_to_b58(conn.my_vk[:16])
-        conn.my_vk_b58 = crypto.bytes_to_b58(conn.my_vk)
+    # Extract their new connection info
+    _their_did, their_vk, endpoint = request.get_connection_info()
+
+    # Set up connection for relationship.
+    with temporary_channel(their_vk, endpoint) as conn:
 
         response = Response.make(
             request.id,
