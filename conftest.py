@@ -5,6 +5,8 @@ import os
 import sys
 import time
 import re
+import itertools
+import logging
 
 import pytest
 from _pytest.terminal import TerminalReporter
@@ -64,6 +66,13 @@ def pytest_addoption(parser):
         dest="list_tests",
         action="store_true",
         help="List available tests."
+    )
+    group.addoption(
+        "--show-dev-notes",
+        dest="dev_notes",
+        action="store_true",
+        help="Output log messages generated during testing for developers\n"
+             "take note of."
     )
 
 
@@ -170,14 +179,29 @@ def pytest_runtest_makereport(item, call):
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """Write Interop Profile to terminal summary."""
-    if not config.getoption('collectonly'):
+    if config.getoption('collectonly'):
+        return
+
+    report = ReportSingleton(config.suite_config)
+
+    if config.getoption('dev_notes'):
         terminalreporter.write('\n')
         terminalreporter.write_sep(
-            '=', 'Interop Profile', bold=True
+            '=', 'Developer Notes', bold=True
         )
         terminalreporter.write('\n')
-        terminalreporter.write(ReportSingleton(config.suite_config).to_json())
+        terminalreporter.write(report.notes_json())
         terminalreporter.write('\n')
+
+
+
+    terminalreporter.write('\n')
+    terminalreporter.write_sep(
+        '=', 'Interop Profile', bold=True
+    )
+    terminalreporter.write('\n')
+    terminalreporter.write(report.report_json())
+    terminalreporter.write('\n')
 
 
 @pytest.fixture(scope='session')
@@ -191,7 +215,7 @@ def report(config):
 
 
 @pytest.fixture
-def report_on_test(request, recwarn, report):
+def report_on_test(request, caplog, report):
     """Universally loaded fixture for getting test reports."""
     yield
     passed = False
@@ -199,16 +223,30 @@ def report_on_test(request, recwarn, report):
             request.node.report_call.outcome == 'passed':
         passed = True
 
-    report.add_report(
-        TestReport(
-            TestFunction(
-                protocol=request.function.protocol,
-                version=request.function.version,
-                role=request.function.role,
-                name=request.function.name,
-                description=request.function.__doc__
-            ),
-            passed,
-            recwarn.list
-        )
+
+    test_fn = TestFunction(
+        protocol=request.function.protocol,
+        version=request.function.version,
+        role=request.function.role,
+        name=request.function.name,
+        description=request.function.__doc__
+    )
+
+    report.add_report(TestReport(test_fn, passed))
+
+    notes = itertools.chain([
+        records for when in ('setup', 'call', 'teardown')
+        for records in caplog.get_records(when)
+    ])
+    notes = filter(
+        lambda log_rec: log_rec.levelno >= logging.WARNING,
+        notes
+    )
+    notes = map(
+        lambda log_rec: log_rec.message,
+        notes
+    )
+    report.add_notes(
+        test_fn,
+        notes
     )

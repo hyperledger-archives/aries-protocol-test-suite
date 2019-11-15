@@ -1,8 +1,8 @@
 """Reporting for aries protocol tests."""
 import datetime
 import json
-from warnings import WarningMessage
 from collections import namedtuple
+from typing import Dict, Union, Sequence
 
 import _pytest
 from setup import VERSION
@@ -45,30 +45,35 @@ class TestFunction:
         self.description = description
 
     def flatten(self):
+        """Flatten for serialization."""
         return {
-            'name': ','.join([
-                self.protocol,
-                self.version,
-                self.role,
-                self.name
-            ]),
+            'name': self.flat_name,
             'description': self.description,
         }
+
+    @property
+    def flat_name(self):
+        """
+        Flattened name consisting of comma separated protocol, version, role,
+        and name.
+        """
+        return ','.join([self.protocol, self.version, self.role, self.name])
+
+    def __hash__(self):
+        return hash(self.flat_name)
 
 
 class TestReport:
     """Collection of information needed to report about a run test."""
 
-    __slots__ = ('function', 'passed', 'warnings')
+    __slots__ = ('function', 'passed',)
 
     def __init__(
             self,
             function: TestFunction,
-            passed: bool,
-            warnings: [WarningMessage]):
+            passed: bool):
         self.function = function
         self.passed = passed
-        self.warnings = warnings
 
     def flatten(self):
         """Flatten this TestReport object into dictionary."""
@@ -77,13 +82,6 @@ class TestReport:
             {
                 **self.function.flatten(),
                 'pass': self.passed,
-                'warnings': list(map(
-                    lambda warning: {
-                        'message': str(warning.message),
-                        'category': warning.category.__name__
-                    },
-                    self.warnings
-                )),
             }.items()
         ))
 
@@ -102,6 +100,7 @@ class Report:
         self.under_test_version = config['subject'].get('version', '')
         self.available_tests: [TestFunction] = []
         self.test_reports: [TestReport] = []
+        self.notes: Dict[TestFunction, [str]] = {}
 
     def add_report(self, report: TestReport):
         """Append test report to test reports list."""
@@ -110,6 +109,15 @@ class Report:
     def add_test(self, test_fn: TestFunction):
         """Append test function to available tests list."""
         self.available_tests.append(test_fn)
+
+    def add_notes(self, test_fn: TestFunction, note: Union[Sequence[str], str]):
+        """Add developer notes for a test."""
+        if test_fn not in self.notes:
+            self.notes[test_fn.flat_name] = []
+        if isinstance(note, str):
+            self.notes[test_fn.flat_name].append(note)
+        else:
+            self.notes[test_fn.flat_name].extend(note)
 
     def make_report(self) -> dict:
         """Construct flat report dictionary."""
@@ -136,12 +144,18 @@ class Report:
 
         return json.dumps(self.flatten_available_tests())
 
-    def to_json(self, pretty_print=True) -> str:
+    def report_json(self, pretty_print=True) -> str:
         """Serialize report to string."""
         if pretty_print:
             return json.dumps(self.make_report(), indent=2)
 
         return json.dumps(self.make_report())
+
+    def notes_json(self, pretty_print=True) -> str:
+        """Serialize notes to string."""
+        if pretty_print:
+            return json.dumps(self.notes, indent=2)
+        return json.dumps(self.notes)
 
     def save(self, path):
         """Save the test report out to a file."""
