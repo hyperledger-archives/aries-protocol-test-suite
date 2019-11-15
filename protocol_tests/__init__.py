@@ -1,10 +1,11 @@
 """ Protocol Test Helpers """
 from contextlib import contextmanager
 from typing import Dict, Iterable, Union
+import copy
 import hashlib
 import json
 
-from aries_staticagent import StaticConnection, crypto
+from aries_staticagent import StaticConnection, Message, crypto
 
 
 def _recipients_from_packed_message(packed_message: bytes) -> Iterable[str]:
@@ -132,3 +133,73 @@ class ChannelManager(StaticConnection):
         channel = self.new_frontchannel(their_vk or b'', endpoint or '')
         yield channel
         self.remove_frontchannel(channel)
+
+
+async def interrupt(generator, on: str = None):
+    """Yield from protocol generator until yielded event matches on."""
+    async for event, *data in generator:
+        yield [event, *data]
+        if on and event == on:
+            return
+
+
+async def yield_messages(generator):
+    async for event, *data in generator:
+        yield [event, *list(filter(lambda item: isinstance(item, Message), data))]
+
+
+async def collect_messages(generator):
+    """Executor for protocol generators, returning all yielded messages."""
+    messages = []
+    async for _event, yielded in yield_messages(generator):
+        messages.extend(map(
+            # Must deep copy to get an accurate snapshot of the data
+            # at the time it was yielded.
+            copy.deepcopy,
+            yielded
+        ))
+    return messages
+
+
+async def event_message_map(generator):
+    """
+    Executor for protocol generators, returning map of event to the yielded
+    messages for that event.
+    """
+    map_ = {}
+    async for event, *messages in yield_messages(generator):
+        map_[event] = list(map(
+            # Must deep copy to get an accurate snapshot of the data
+            # at the time it was yielded.
+            copy.deepcopy,
+            messages
+        ))
+    return map_
+
+
+async def event_data_map(generator):
+    """
+    Executor for protocol generators, returning map of event to the yielded
+    data for that event.
+    """
+    map_ = {}
+    async for event, *data in generator:
+        map_[event] = data
+    return map_
+
+
+async def last(generator):
+    """Executor for protocol generators, returning the last yielded value."""
+    last_data = None
+    async for _event, *data in generator:
+        last_data = data
+
+    if len(last_data) == 1:
+        return last_data[0]
+    return last_data
+
+
+async def run(generator):
+    """Executor for protocol generators that simply runs the generator to completion."""
+    async for _event, *_data in generator:
+        pass
