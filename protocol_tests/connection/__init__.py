@@ -234,3 +234,7 @@ class Response(Message):
             crypto.verify_signed_message_field(self['connection~sig'])
         assert signer == expected_signer, 'Unexpected signer'
         del self['connection~sig']
+
+    def get_connection_info(self):
+        """Get connection information out of Request Message."""
+        return DIDDoc(self['connection']['DIDDoc']).get_connection_info()
