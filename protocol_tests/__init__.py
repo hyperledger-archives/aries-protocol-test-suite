@@ -144,7 +144,7 @@ class ChannelManager(StaticConnection):
         self.remove_frontchannel(channel)
 
 
-async def interrupt(generator, on: str = None):
+async def interrupt(generator, on: str = None):  # pylint: disable=invalid-name
     """Yield from protocol generator until yielded event matches on."""
     async for event, *data in generator:
         yield [event, *data]
@@ -155,7 +155,13 @@ async def interrupt(generator, on: str = None):
 async def yield_messages(generator):
     """Yield only the event and messages from generator."""
     async for event, *data in generator:
-        yield [event, *list(filter(lambda item: isinstance(item, Message), data))]
+        yield [
+            event,
+            *list(filter(
+                lambda item: isinstance(item, Message),
+                data
+            ))
+        ]
 
 
 async def collect_messages(generator):

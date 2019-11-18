@@ -2,12 +2,14 @@
 """
 import pytest
 
-from aries_staticagent import crypto
 from reporting import meta
 from . import Invite, Request, Response
 from .. import interrupt, last, event_message_map, run
 
+# pylint: disable=redefined-outer-name
+
 # Inviter:
+
 
 async def _inviter(config, temporary_channel):
     """Inviter protocol generator."""
@@ -61,14 +63,16 @@ async def inviter(config, temporary_channel):
 
 
 @pytest.mark.asyncio
-@meta(protocol='connections', version='1.0', role='inviter', name='can-be-inviter')
+@meta(protocol='connections', version='1.0',
+      role='inviter', name='can-be-inviter')
 async def test_connection_started_by_tested_agent(inviter):
     """Test a connection as started by the agent under test."""
     await run(inviter)
 
 
 @pytest.mark.asyncio
-@meta(protocol='connections', version='1.0', role='inviter', name='response-pre-sig-verify-valid')
+@meta(protocol='connections', version='1.0',
+      role='inviter', name='response-pre-sig-verify-valid')
 async def test_response_valid_pre(inviter):
     """Response before signature verification is valid."""
     _conn, response = await last(interrupt(inviter, on='response'))
@@ -76,7 +80,8 @@ async def test_response_valid_pre(inviter):
 
 
 @pytest.mark.asyncio
-@meta(protocol='connections', version='1.0', role='inviter', name='response-post-sig-verify-valid')
+@meta(protocol='connections', version='1.0',
+      role='inviter', name='response-post-sig-verify-valid')
 async def test_response_valid_post(inviter):
     """Response after signature verification is valid."""
     _conn, response = await last(interrupt(inviter, on='response_verified'))
@@ -84,7 +89,8 @@ async def test_response_valid_post(inviter):
 
 
 @pytest.mark.asyncio
-@meta(protocol='connections', version='1.0', role='inviter', name='response-thid-matches-request')
+@meta(protocol='connections', version='1.0',
+      role='inviter', name='response-thid-matches-request')
 async def test_response_thid_matches_request(inviter):
     """Response's thread has thid matching id of request."""
     message_map = await event_message_map(inviter)
@@ -96,7 +102,8 @@ async def test_response_thid_matches_request(inviter):
 
 
 @pytest.mark.asyncio
-@meta(protocol='connections', version='1.0', role='inviter', name='responds-to-ping')
+@meta(protocol='connections', version='1.0',
+      role='inviter', name='responds-to-ping')
 async def test_finish_with_trust_ping(inviter):
     """Inviter responds to trust ping after connection protocol completion."""
     conn = await last(interrupt(inviter, on='complete'))
@@ -105,7 +112,8 @@ async def test_finish_with_trust_ping(inviter):
             '@type': 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping',
             'response_requested': True
         },
-        condition=lambda msg: msg.type == 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response',
+        condition=lambda msg: msg.type ==
+        'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response',
         timeout=5,
     )
 
@@ -164,7 +172,8 @@ async def invitee(config, temporary_channel):
 
 
 @pytest.mark.asyncio
-@meta(protocol='connections', version='1.0', role='invitee', name='can-be-invitee')
+@meta(protocol='connections', version='1.0',
+      role='invitee', name='can-be-invitee')
 async def test_connection_started_by_suite(invitee):
     """Test a connection as started by the suite."""
     await run(invitee)

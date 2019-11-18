@@ -1,3 +1,5 @@
+"""Connection protocol messages and helpers."""
+
 import base64
 import re
 import uuid
