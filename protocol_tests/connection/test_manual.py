@@ -26,7 +26,7 @@ async def _inviter(config, temporary_channel):
         request = Request.make(
             'test-connection-started-by-tested-agent',
             conn.did,
-            conn.my_vk_b58,
+            conn.verkey_b58,
             config['endpoint']
         )
 
@@ -46,8 +46,8 @@ async def _inviter(config, temporary_channel):
 
         yield 'response_verified', conn, response
 
-        _did, conn.their_vk_b58, conn.endpoint = response.get_connection_info()
-        conn.their_vk = crypto.b58_to_bytes(conn.their_vk_b58)
+        _did, their_new_vk, their_new_endpoint = response.get_connection_info()
+        conn.update(their_vk=their_new_vk, endpoint=their_new_endpoint)
 
         yield 'complete', conn
 
@@ -117,7 +117,7 @@ async def _invitee(config, temporary_channel):
     with temporary_channel() as invite_conn:
         invite = Invite.make(
             'test-suite-connection-started-by-suite',
-            invite_conn.my_vk_b58,
+            invite_conn.verkey_b58,
             config['endpoint']
         )
         yield 'invite', invite_conn, invite
@@ -143,12 +143,12 @@ async def _invitee(config, temporary_channel):
         response = Response.make(
             request.id,
             conn.did,
-            conn.my_vk_b58,
+            conn.verkey_b58,
             config['endpoint']
         )
         yield 'response', conn, response
 
-        response.sign(signer=conn.my_vk_b58, secret=conn.my_sk)
+        response.sign(signer=conn.verkey_b58, secret=conn.sigkey)
         yield 'signed_response', conn, response
 
         await conn.send_async(response)
