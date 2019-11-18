@@ -1,10 +1,17 @@
 import base64
 import re
 import uuid
+from collections import namedtuple
 
 from voluptuous import Schema, Optional
 from aries_staticagent import Message, crypto
 from ..schema import MessageSchema
+
+
+TheirInfo = namedtuple(
+    'TheirInfo',
+    'endpoint, recipients, routing_keys'
+)
 
 
 class DIDDoc(dict):
@@ -54,10 +61,11 @@ class DIDDoc(dict):
 
     def get_connection_info(self):
         """Extract connection informatin from DID Doc."""
-        return (
-            self['publicKey'][0]['controller'],  # did
-            self['publicKey'][0]['publicKeyBase58'],  # vk
-            self['service'][0]['serviceEndpoint']  # endpoint
+        return TheirInfo(
+            # self['publicKey'][0]['controller'],  # did
+            self['service'][0]['serviceEndpoint'],  # endpoint
+            self['service'][0]['recipientKeys'],  # recipients
+            self['service'][0].get('routingKeys'),  # routing (optional)
         )
 
 
@@ -112,9 +120,11 @@ class Invite(Message):
 
     def get_connection_info(self):
         """Get connection information out of invite message."""
-        return (
-            self['recipientKeys'][0],
-            self['serviceEndpoint']
+        return TheirInfo(
+            # None, #did
+            self['serviceEndpoint'],
+            self['recipientKeys'],
+            self.get('routingKeys'),
         )
 
 

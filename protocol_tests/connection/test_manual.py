@@ -18,8 +18,8 @@ async def _inviter(config, temporary_channel):
     yield 'invite', invite
 
     # Create my information for connection
-    invite_key, invite_endpoint = invite.get_connection_info()
-    with temporary_channel(invite_key, invite_endpoint) as conn:
+    invite_info = invite.get_connection_info()
+    with temporary_channel(**invite_info._asdict()) as conn:
 
         yield 'before_request', conn
 
@@ -41,13 +41,13 @@ async def _inviter(config, temporary_channel):
         yield 'response', conn, response
 
         response.validate_pre_sig_verify()
-        response.verify_sig(invite_key)
+        response.verify_sig(invite_info.recipients[0])
         response.validate_post_sig_verify()
 
         yield 'response_verified', conn, response
 
-        _did, their_new_vk, their_new_endpoint = response.get_connection_info()
-        conn.update(their_vk=their_new_vk, endpoint=their_new_endpoint)
+        info = response.get_connection_info()
+        conn.update(**info._asdict())
 
         yield 'complete', conn
 
@@ -136,10 +136,10 @@ async def _invitee(config, temporary_channel):
     # messages with key matching invitation key).
 
     # Extract their new connection info
-    _their_did, their_vk, endpoint = request.get_connection_info()
+    info = request.get_connection_info()
 
     # Set up connection for relationship.
-    with temporary_channel(their_vk, endpoint) as conn:
+    with temporary_channel(**info._asdict()) as conn:
         response = Response.make(
             request.id,
             conn.did,
