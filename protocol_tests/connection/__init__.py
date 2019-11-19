@@ -6,9 +6,9 @@ import re
 import uuid
 from collections import namedtuple
 
-from voluptuous import Schema, Optional
+from voluptuous import Schema, Optional, And, Extra, Match
 from aries_staticagent import Message, crypto
-from ..schema import MessageSchema
+from ..schema import MessageSchema, AtLeastOne
 
 
 TheirInfo = namedtuple(
@@ -31,32 +31,57 @@ class DIDDoc(dict):
     # This particular schema covers Ed25519 keys. All key types here:
     # https://w3c-ccg.github.io/ld-cryptosuite-registry/
     EXPECTED_SERVICE_TYPE = 'IndyAgent'
+    EXPECTED_SERVICE_SUFFIX = 'indy'
+
+    PUBLIC_KEY_VALIDATOR = Schema({
+        "id": str,
+        "type": "Ed25519VerificationKey2018",
+        "controller": str,
+        "publicKeyBase58": str
+    })
+
     VALIDATOR = Schema({
         "@context": "https://w3id.org/did/v1",
         "id": str,
-        Optional("publicKey"): [{
-            "id": str,
-            "type": "Ed25519VerificationKey2018",
-            "controller": str,
-            "publicKeyBase58": str
-        }],
-        Optional("authentication"): [{ # This is not fully correct: https://w3c.github.io/did-core/#authentication
-            "type": "Ed25519SignatureAuthentication2018",
-            "publicKey": str
-        }],
-        "service": [{
-            "id": str,
-            "type": str,
-            Optional("priority"): int,
-            Optional("recipientKeys"): [str],
-            Optional("routingKeys"): [str],
-            "serviceEndpoint": str,
-        }],
+        "publicKey": [PUBLIC_KEY_VALIDATOR],
+        # This is not fully correct; see:
+        # https://w3c.github.io/did-core/#authentication
+        Optional("authentication"): [
+            {
+                "type": "Ed25519SignatureAuthentication2018",
+                "publicKey": str
+            },
+            PUBLIC_KEY_VALIDATOR,
+            str
+        ],
+        "service": And(
+            # Service contains at least one agent service
+            AtLeastOne(
+                {
+                    'id': Match('.*{}$'.format(EXPECTED_SERVICE_SUFFIX)),
+                    'type': EXPECTED_SERVICE_TYPE,
+                    'priority': int,
+                    'recipientKeys': [str],
+                    Optional('routingKeys'): [str],
+                    'serviceEndpoint': str
+                },
+                msg='DID Communication service missing'
+            ),
+            # And all services match DID Spec
+            [
+                {
+                    "id": str,
+                    "type": str,
+                    "serviceEndpoint": str,
+                    Extra: object  # Allow extra values
+                }
+            ],
+        )
     })
 
     def validate(self):
         """Validate this DIDDoc."""
-        DIDDoc.VALIDATOR(self)
+        self.update(DIDDoc.VALIDATOR(self))
 
     @classmethod
     def make(cls, my_did, my_vk, endpoint):
