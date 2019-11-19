@@ -1,5 +1,7 @@
 """ Manual Connection Protocol tests.
 """
+import json
+
 import pytest
 
 from reporting import meta
@@ -123,12 +125,15 @@ async def test_finish_with_trust_ping(inviter):
 async def _invitee(config, temporary_channel):
     """Protocol generator for Invitee role."""
     with temporary_channel() as invite_conn:
+        invitation_key = invite_conn.sigkey
         invite = Invite.make(
             'test-suite-connection-started-by-suite',
             invite_conn.verkey_b58,
             config['endpoint']
         )
+
         yield 'invite', invite_conn, invite
+        print("\n\nInvitation as JSON: ", json.dumps(invite))
 
         invite_url = invite.to_url()
         print("\n\nInvitation encoded as URL: ", invite_url)
@@ -156,7 +161,7 @@ async def _invitee(config, temporary_channel):
         )
         yield 'response', conn, response
 
-        response.sign(signer=conn.verkey_b58, secret=conn.sigkey)
+        response.sign(signer=conn.verkey_b58, secret=invitation_key)
         yield 'signed_response', conn, response
 
         await conn.send_async(response)
