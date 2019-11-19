@@ -125,7 +125,8 @@ async def test_finish_with_trust_ping(inviter):
 async def _invitee(config, temporary_channel):
     """Protocol generator for Invitee role."""
     with temporary_channel() as invite_conn:
-        invitation_key = invite_conn.sigkey
+        invite_verkey_b58 = invite_conn.verkey_b58
+        invite_sigkey = invite_conn.sigkey
         invite = Invite.make(
             'test-suite-connection-started-by-suite',
             invite_conn.verkey_b58,
@@ -133,10 +134,10 @@ async def _invitee(config, temporary_channel):
         )
 
         yield 'invite', invite_conn, invite
-        print("\n\nInvitation as JSON: ", json.dumps(invite))
+        print("\n\nInvitation as JSON:", invite.serialize())
 
         invite_url = invite.to_url()
-        print("\n\nInvitation encoded as URL: ", invite_url)
+        print("\n\nInvitation encoded as URL:", invite_url)
 
         request = Request(await invite_conn.await_message(
             condition=lambda msg: msg.type == Request.TYPE,
@@ -161,7 +162,10 @@ async def _invitee(config, temporary_channel):
         )
         yield 'response', conn, response
 
-        response.sign(signer=conn.verkey_b58, secret=invitation_key)
+        response.sign(
+            signer=invite_verkey_b58,
+            secret=invite_sigkey
+        )
         yield 'signed_response', conn, response
 
         await conn.send_async(response)

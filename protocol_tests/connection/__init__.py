@@ -17,10 +17,20 @@ TheirInfo = namedtuple(
 )
 
 
+class KeyReferenceError(Exception):
+    """Raised when no matching reference is found for a key."""
+
+
+class NoSuitableService(Exception):
+    """Raised when no DIDComm service is found."""
+
+
 class DIDDoc(dict):
     """DIDDoc class for creating and verifying DID Docs."""
     # DIDDoc specification is very flexible: https://w3c-ccg.github.io
-    # This particular schema covers Ed25519 keys. All key types here: https://w3c-ccg.github.io/ld-cryptosuite-registry/
+    # This particular schema covers Ed25519 keys. All key types here:
+    # https://w3c-ccg.github.io/ld-cryptosuite-registry/
+    EXPECTED_SERVICE_TYPE = 'IndyAgent'
     VALIDATOR = Schema({
         "@context": "https://w3id.org/did/v1",
         "id": str,
@@ -69,26 +79,51 @@ class DIDDoc(dict):
             }],
         })
 
-
     @classmethod
     def parse_key_reference(cls, key: str):
+        """Parse out a key reference if present; return the key otherwise."""
         parts = key.split("#")
-        return parts[1] or parts[0]
-
+        return parts[1] if len(parts) > 1 else parts[0]
 
     def key_for_reference(self, key: str) -> Optional(str):
+        """Find key matching reference."""
         key = self.parse_key_reference(key)
-        return next((public_key['publicKeyBase58'] for public_key in self['publicKey']
-                     if public_key['id'] == key or public_key['publicKeyBase58'] == key), None)
+        found_key = next((
+            public_key['publicKeyBase58']
+            for public_key in self.get('publicKey', [])
+            if key in (public_key['id'], public_key['publicKeyBase58'])
+        ), None)
 
+        if not found_key:
+            raise KeyReferenceError(
+                'No key found for reference {}'.format(key)
+            )
+
+        return found_key
 
     def get_connection_info(self):
         """Extract connection information from DID Doc."""
+        service = next(filter(
+            lambda service: service['type'] == DIDDoc.EXPECTED_SERVICE_TYPE,
+            self['service']
+        ), None)
+        if not service:
+            raise NoSuitableService(
+                'No Service with type {} found in DID Document'
+                .format(DIDDoc.EXPECTED_SERVICE_TYPE)
+            )
+
         return TheirInfo(
             # self['publicKey'][0]['controller'],  # did
-            self['service'][0]['serviceEndpoint'],  # endpoint
-            [self.key_for_reference(recipient_key) for recipient_key in self['service'][0]['recipientKeys']],  # recipients
-            [self.key_for_reference(routing_key) for routing_key in self['service'][0]['routingKeys']],  # routing (optional)
+            service['serviceEndpoint'],  # endpoint
+            list(map(
+                self.key_for_reference,
+                service.get('recipientKeys', [])
+            )),
+            list(map(
+                self.key_for_reference,
+                service.get('routingKeys', [])
+            )),
         )
 
 
