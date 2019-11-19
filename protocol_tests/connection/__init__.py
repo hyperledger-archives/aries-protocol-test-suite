@@ -1,6 +1,7 @@
 """Connection protocol messages and helpers."""
 
 import base64
+import json
 import re
 import uuid
 from collections import namedtuple
@@ -18,19 +19,26 @@ TheirInfo = namedtuple(
 
 class DIDDoc(dict):
     """DIDDoc class for creating and verifying DID Docs."""
+    # DIDDoc specification is very flexible: https://w3c-ccg.github.io
+    # This particular schema covers Ed25519 keys. All key types here: https://w3c-ccg.github.io/ld-cryptosuite-registry/
     VALIDATOR = Schema({
         "@context": "https://w3id.org/did/v1",
         "id": str,
-        "publicKey": [{
+        Optional("publicKey"): [{
             "id": str,
             "type": "Ed25519VerificationKey2018",
             "controller": str,
             "publicKeyBase58": str
         }],
+        Optional("authentication"): [{ # This is not fully correct: https://w3c.github.io/did-core/#authentication
+            "type": "Ed25519SignatureAuthentication2018",
+            "publicKey": str
+        }],
         "service": [{
             "id": str,
-            "type": "IndyAgent",
-            "recipientKeys": [str],
+            "type": str,
+            Optional("priority"): int,
+            Optional("recipientKeys"): [str],
             Optional("routingKeys"): [str],
             "serviceEndpoint": str,
         }],
@@ -61,13 +69,26 @@ class DIDDoc(dict):
             }],
         })
 
+
+    @classmethod
+    def parse_key_reference(cls, key: str):
+        parts = key.split("#")
+        return parts[1] or parts[0]
+
+
+    def key_for_reference(self, key: str) -> Optional(str):
+        key = self.parse_key_reference(key)
+        return next((public_key['publicKeyBase58'] for public_key in self['publicKey']
+                     if public_key['id'] == key or public_key['publicKeyBase58'] == key), None)
+
+
     def get_connection_info(self):
-        """Extract connection informatin from DID Doc."""
+        """Extract connection information from DID Doc."""
         return TheirInfo(
             # self['publicKey'][0]['controller'],  # did
             self['service'][0]['serviceEndpoint'],  # endpoint
-            self['service'][0]['recipientKeys'],  # recipients
-            self['service'][0].get('routingKeys'),  # routing (optional)
+            [self.key_for_reference(recipient_key) for recipient_key in self['service'][0]['recipientKeys']],  # recipients
+            [self.key_for_reference(routing_key) for routing_key in self['service'][0]['routingKeys']],  # routing (optional)
         )
 
 
@@ -107,14 +128,19 @@ class Invite(Message):
         return '{}?c_i={}'.format(self['serviceEndpoint'], b64_invite)
 
     @classmethod
-    def parse_invite(cls, invite_url: str):
+    def parse_invite(cls, invite: str):
         """Parse an invite url, returning a new message."""
-        matches = re.match('(.+)?c_i=(.+)', invite_url)
-        assert matches, 'Improperly formatted invite url!'
 
-        invite_msg = cls.deserialize(
-            base64.urlsafe_b64decode(matches.group(2)).decode('ascii')
-        )
+        try:
+            # If the invite is JSON already
+            json.loads(invite)
+        except ValueError:
+            # If the invite is base64 url
+            matches = re.match('(.+)?c_i=(.+)', invite)
+            assert matches, 'Improperly formatted invite url!'
+            invite = base64.urlsafe_b64decode(matches.group(2)).decode('ascii')
+
+        invite_msg = cls.deserialize(invite)
 
         Invite.validate(invite_msg)
 
@@ -223,6 +249,7 @@ class Response(Message):
                     "service": [{
                         "id": my_did + ";indy",
                         "type": "IndyAgent",
+                        "priority": 0,
                         "recipientKeys": [my_vk],
                         "routingKeys": [],
                         "serviceEndpoint": endpoint,
