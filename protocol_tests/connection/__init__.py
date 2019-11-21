@@ -5,6 +5,7 @@ import json
 import re
 import uuid
 from collections import namedtuple
+from enum import Enum
 
 from voluptuous import Schema, Optional, And, Extra, Match
 from aries_staticagent import Message, crypto
@@ -135,7 +136,7 @@ class DIDDoc(dict):
         if not service:
             raise NoSuitableService(
                 'No Service with type {} found in DID Document'
-                .format(DIDDoc.EXPECTED_SERVICE_TYPE)
+                    .format(DIDDoc.EXPECTED_SERVICE_TYPE)
             )
 
         return TheirInfo(
@@ -337,3 +338,145 @@ class Response(Message):
     def get_connection_info(self):
         """Get connection information out of Request Message."""
         return DIDDoc(self['connection']['DIDDoc']).get_connection_info()
+
+
+class Ack(Message):
+    """Ack Message"""
+
+    TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/notification/1.0/ack'
+
+
+    class Status(Enum):
+        OK = "OK"
+        FAIL = "FAIL"
+        PENDING = "PENDING"
+
+
+    VALIDATOR = MessageSchema({
+        '@type': TYPE,
+        '@id': str,
+        "status": Status,
+        '~thread': {
+            'thid': str,
+            Optional('sender_order'): int
+        }
+    })
+
+
+    def validate(self):
+        """Validate this Ack Message."""
+        Ack.VALIDATOR(self)
+
+
+    @classmethod
+    def make(cls, thid, status):
+        """Create new Ack Message."""
+        return cls({
+            '@type': Ack.TYPE,
+            '@id': str(uuid.uuid4()),
+            "status": status,
+            '~thread': {
+                'thid': thid
+            }
+        })
+
+
+class ProblemReport(Message):
+    """Problem Report Message"""
+
+    TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/connections/1.0/problem_report'
+
+
+    class ProblemCode(Enum):
+        REQUEST_NOT_ACCEPTED = "request_not_accepted"
+        REQUEST_PROCESSING_ERROR = "request_processing_error"
+        RESPONSE_NOT_ACCEPTED = "response_not_accepted"
+        RESPONSE_PROCESSING_ERROR = "response_processing_error"
+
+
+    VALIDATOR = MessageSchema({
+        '@type': TYPE,
+        '@id': str,
+        Optional("problem-code"): ProblemCode,
+        Optional("explain"): str,
+        Optional("~i10n"): {
+            'locale': str
+        },
+        '~thread': {
+            'thid': str,
+            Optional('sender_order'): int
+        }
+    })
+
+
+    def validate(self):
+        """Validate this ProblemReport Message."""
+        ProblemReport.VALIDATOR(self)
+
+
+    @classmethod
+    def make(cls, thid, problem_code, explain='error is occurred'):
+        """Create new Response Message."""
+        return cls({
+            '@type': ProblemReport.TYPE,
+            '@id': str(uuid.uuid4()),
+            'problem-code': problem_code,
+            'explain': explain,
+            '~thread': {
+                'thid': thid
+            }
+        })
+
+
+class Ping(Message):
+    """Ping Message"""
+
+    TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping'
+
+    VALIDATOR = MessageSchema({
+        '@type': TYPE,
+        '@id': str,
+        Optional('comment'): str,
+        "response_requested": bool,
+    })
+
+
+    def validate(self):
+        """Validate this Ping Message."""
+        Ping.VALIDATOR(self)
+
+
+    @classmethod
+    def make(cls, response_requested):
+        """Create new Ping Message."""
+        return cls({
+            '@type': Ping.TYPE,
+            '@id': str(uuid.uuid4()),
+            "response_requested": response_requested,
+        })
+
+
+class PingResponse(Message):
+    """PingResponse Message"""
+
+    TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'
+
+    VALIDATOR = MessageSchema({
+        '@type': TYPE,
+        '@id': str,
+        Optional('comment'): str
+    })
+
+
+    def validate(self):
+        """Validate this PingResponse Message."""
+        Ping.VALIDATOR(self)
+
+
+    @classmethod
+    def make(cls):
+        """Create new PingResponse Message."""
+        return cls({
+            '@type': PingResponse.TYPE,
+            '@id': str(uuid.uuid4()),
+        })
