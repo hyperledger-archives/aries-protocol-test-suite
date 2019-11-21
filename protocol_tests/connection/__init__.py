@@ -480,3 +480,11 @@ class PingResponse(Message):
             '@type': PingResponse.TYPE,
             '@id': str(uuid.uuid4()),
         })
+
+
+class ConnectionStatus(Enum):
+    NULL = "null"
+    INVITED = "invited"
+    REQUESTED = "requested"
+    RESPONDED = "responded"
+    COMPLETE = "complete"

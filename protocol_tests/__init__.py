@@ -1,11 +1,14 @@
 """ Protocol Test Helpers """
 from contextlib import contextmanager
+from enum import Enum
 from typing import Dict, Iterable, Union
 import copy
 import hashlib
 import json
 
 from aries_staticagent import StaticConnection, Message, crypto
+
+from urllib.request import Request, urlopen
 
 
 def _recipients_from_packed_message(packed_message: bytes) -> Iterable[str]:
@@ -81,12 +84,12 @@ class ChannelManager(StaticConnection):
                 await self.frontchannels[recipient].handle(packed_message)
 
     def new_frontchannel(
-            self,
-            *,
-            their_vk: Union[bytes, str] = None,
-            recipients: [Union[bytes, str]] = None,
-            routing_keys: [Union[bytes, str]] = None,
-            endpoint: str = None) -> StaticConnection:
+        self,
+        *,
+        their_vk: Union[bytes, str] = None,
+        recipients: [Union[bytes, str]] = None,
+        routing_keys: [Union[bytes, str]] = None,
+        endpoint: str = None) -> StaticConnection:
         """
         Create a new connection and add it as a frontchannel.
 
@@ -129,12 +132,12 @@ class ChannelManager(StaticConnection):
 
     @contextmanager
     def temporary_channel(
-            self,
-            *,
-            their_vk: Union[bytes, str] = None,
-            recipients: [Union[bytes, str]] = None,
-            routing_keys: [Union[bytes, str]] = None,
-            endpoint: str = None) -> StaticConnection:
+        self,
+        *,
+        their_vk: Union[bytes, str] = None,
+        recipients: [Union[bytes, str]] = None,
+        routing_keys: [Union[bytes, str]] = None,
+        endpoint: str = None) -> StaticConnection:
         """Use 'with' statement to use a temporary channel."""
         channel = self.new_frontchannel(
             their_vk=their_vk, endpoint=endpoint, recipients=recipients,
@@ -222,3 +225,26 @@ async def run(generator):
     """
     async for _event, *_data in generator:
         pass
+
+
+class BackChannel:
+    def __init__(self, endpoint):
+        self.endpoint = endpoint
+        self.headers = {'content-type': 'application/json'}
+
+
+    class Action(Enum):
+        START_CONNECTION_AS_INVITER = "start_connection_as_inviter"
+        START_CONNECTION_AS_INVITEE = "start_connection_as_invitee"
+        GET_CONNECTION_STATE = "get_connection_state"
+        RESET_CONNECTION = "reset"
+
+
+    def send(self, action: Action, payload=None) -> str:
+        body = {'action': action.value}
+        if payload:
+            body['payload'] = payload
+
+        data = json.dumps(body).encode('utf8')
+        request = Request(self.endpoint, data=data, headers=self.headers)
+        return urlopen(request).read().decode()
