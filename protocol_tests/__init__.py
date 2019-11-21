@@ -45,17 +45,16 @@ class ChannelManager(StaticConnection):
         Args:
             endpoint: HTTP URL of test subjects backchannel endpoint
         """
-        test_suite_vk, test_suite_sk = crypto.create_keypair(
+        test_suite_keys = crypto.create_keypair(
             hashlib.sha256(b'aries-protocol-test-suite').digest()
         )
         test_subject_vk, _test_subject_sk = crypto.create_keypair(
             hashlib.sha256(b'aries-protocol-test-subject').digest()
         )
         super().__init__(
-            test_suite_vk,
-            test_suite_sk,
-            test_subject_vk,
-            endpoint
+            test_suite_keys,
+            their_vk=test_subject_vk,
+            endpoint=endpoint
         )
 
         self.frontchannels: Dict[str, StaticConnection] = {}
@@ -68,7 +67,7 @@ class ChannelManager(StaticConnection):
     @property
     def test_suite_vk(self):
         """Get test_suite_vk."""
-        return self.my_vk
+        return self.verkey
 
     async def handle(self, packed_message: bytes):
         """
@@ -76,15 +75,18 @@ class ChannelManager(StaticConnection):
         appropriate frontchannels.
         """
         for recipient in _recipients_from_packed_message(packed_message):
-            if recipient == self.my_vk_b58:
+            if recipient == self.verkey_b58:
                 await super().handle(packed_message)
             if recipient in self.frontchannels:
                 await self.frontchannels[recipient].handle(packed_message)
 
     def new_frontchannel(
             self,
-            their_vk: Union[bytes, str],
-            endpoint: str) -> StaticConnection:
+            *,
+            their_vk: Union[bytes, str] = None,
+            recipients: [Union[bytes, str]] = None,
+            routing_keys: [Union[bytes, str]] = None,
+            endpoint: str = None) -> StaticConnection:
         """
         Create a new connection and add it as a frontchannel.
 
@@ -97,20 +99,21 @@ class ChannelManager(StaticConnection):
         Returns:
             Returns the new front channel (static connection).
         """
-        fc_vk, fc_sk = crypto.create_keypair()
+        fc_keys = crypto.create_keypair()
         new_fc = StaticConnection(
-            fc_vk,
-            fc_sk,
-            their_vk,
-            endpoint
+            fc_keys,
+            their_vk=their_vk,
+            endpoint=endpoint,
+            recipients=recipients,
+            routing_keys=routing_keys
         )
-        frontchannel_index = crypto.bytes_to_b58(fc_vk)
+        frontchannel_index = crypto.bytes_to_b58(new_fc.verkey)
         self.frontchannels[frontchannel_index] = new_fc
         return new_fc
 
     def add_frontchannel(self, connection: StaticConnection):
         """Add an already created connection as a frontchannel."""
-        frontchannel_index = crypto.bytes_to_b58(connection.my_vk)
+        frontchannel_index = crypto.bytes_to_b58(connection.verkey)
         self.frontchannels[frontchannel_index] = connection
 
     def remove_frontchannel(self, connection: StaticConnection):
@@ -120,22 +123,28 @@ class ChannelManager(StaticConnection):
         Args:
             fc_vk: The frontchannel's verification key
         """
-        fc_vk = crypto.bytes_to_b58(connection.my_vk)
-        if fc_vk in self.frontchannels:
-            del self.frontchannels[fc_vk]
+        frontchannel_index = crypto.bytes_to_b58(connection.verkey)
+        if frontchannel_index in self.frontchannels:
+            del self.frontchannels[frontchannel_index]
 
     @contextmanager
     def temporary_channel(
             self,
-            their_vk=None,
-            endpoint=None) -> StaticConnection:
+            *,
+            their_vk: Union[bytes, str] = None,
+            recipients: [Union[bytes, str]] = None,
+            routing_keys: [Union[bytes, str]] = None,
+            endpoint: str = None) -> StaticConnection:
         """Use 'with' statement to use a temporary channel."""
-        channel = self.new_frontchannel(their_vk or b'', endpoint or '')
+        channel = self.new_frontchannel(
+            their_vk=their_vk, endpoint=endpoint, recipients=recipients,
+            routing_keys=routing_keys
+        )
         yield channel
         self.remove_frontchannel(channel)
 
 
-async def interrupt(generator, on: str = None):
+async def interrupt(generator, on: str = None):  # pylint: disable=invalid-name
     """Yield from protocol generator until yielded event matches on."""
     async for event, *data in generator:
         yield [event, *data]
@@ -144,8 +153,15 @@ async def interrupt(generator, on: str = None):
 
 
 async def yield_messages(generator):
+    """Yield only the event and messages from generator."""
     async for event, *data in generator:
-        yield [event, *list(filter(lambda item: isinstance(item, Message), data))]
+        yield [
+            event,
+            *list(filter(
+                lambda item: isinstance(item, Message),
+                data
+            ))
+        ]
 
 
 async def collect_messages(generator):
@@ -200,6 +216,9 @@ async def last(generator):
 
 
 async def run(generator):
-    """Executor for protocol generators that simply runs the generator to completion."""
+    """
+    Executor for protocol generators that simply runs the generator to
+    completion.
+    """
     async for _event, *_data in generator:
         pass

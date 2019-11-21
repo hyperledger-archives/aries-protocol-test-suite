@@ -90,3 +90,27 @@ class MessageSchema():
                     raise ValidationError(error)
             else:
                 raise ValidationError(error)
+
+
+def is_valid(validator, value):
+    """Item validated without errors."""
+    try:
+        validator(value)
+        return True
+    except Invalid:
+        return False
+
+
+class AtLeastOne():  # pylint: disable=too-few-public-methods
+    """At least one item in a collection matches the given schema."""
+    def __init__(self, schema, msg=None):
+        self.validator = Schema(schema)
+        self.msg = msg
+
+    def __call__(self, collection):
+        for item in collection:
+            if is_valid(self.validator, item):
+                return collection
+        if self.msg:
+            raise Invalid(self.msg)
+        raise Invalid('Item matching schema not found in collection')
