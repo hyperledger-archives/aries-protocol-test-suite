@@ -30,8 +30,8 @@ class DIDDoc(dict):
     # DIDDoc specification is very flexible: https://w3c-ccg.github.io
     # This particular schema covers Ed25519 keys. All key types here:
     # https://w3c-ccg.github.io/ld-cryptosuite-registry/
-    EXPECTED_SERVICE_TYPE = 'did-communication'
-    EXPECTED_SERVICE_SUFFIX = 'did-communication'
+    EXPECTED_SERVICE_TYPE = 'IndyAgent'
+    EXPECTED_SERVICE_SUFFIX = 'indy'
 
     PUBLIC_KEY_VALIDATOR = Schema({
         "id": str,
@@ -58,7 +58,7 @@ class DIDDoc(dict):
             # Service contains at least one agent service
             AtLeastOne(
                 {
-                    'id': Match('.*{}$'.format(EXPECTED_SERVICE_SUFFIX)),
+                    'id': Match('.*;{}$'.format(EXPECTED_SERVICE_SUFFIX)),
                     'type': EXPECTED_SERVICE_TYPE,
                     'priority': int,
                     'recipientKeys': [str],
