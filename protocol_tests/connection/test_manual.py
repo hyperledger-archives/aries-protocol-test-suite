@@ -1,5 +1,7 @@
 """ Manual Connection Protocol tests.
 """
+import json
+
 import pytest
 
 from reporting import meta

@@ -59,7 +59,7 @@ class DIDDoc(dict):
             # Service contains at least one agent service
             AtLeastOne(
                 {
-                    'id': Match('.*{}$'.format(EXPECTED_SERVICE_SUFFIX)),
+                    'id': Match('.*;{}$'.format(EXPECTED_SERVICE_SUFFIX)),
                     'type': EXPECTED_SERVICE_TYPE,
                     'priority': int,
                     'recipientKeys': [str],
@@ -136,7 +136,7 @@ class DIDDoc(dict):
         if not service:
             raise NoSuitableService(
                 'No Service with type {} found in DID Document'
-                    .format(DIDDoc.EXPECTED_SERVICE_TYPE)
+                .format(DIDDoc.EXPECTED_SERVICE_TYPE)
             )
 
         return TheirInfo(

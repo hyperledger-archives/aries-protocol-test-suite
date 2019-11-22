@@ -84,12 +84,12 @@ class ChannelManager(StaticConnection):
                 await self.frontchannels[recipient].handle(packed_message)
 
     def new_frontchannel(
-        self,
-        *,
-        their_vk: Union[bytes, str] = None,
-        recipients: [Union[bytes, str]] = None,
-        routing_keys: [Union[bytes, str]] = None,
-        endpoint: str = None) -> StaticConnection:
+            self,
+            *,
+            their_vk: Union[bytes, str] = None,
+            recipients: [Union[bytes, str]] = None,
+            routing_keys: [Union[bytes, str]] = None,
+            endpoint: str = None) -> StaticConnection:
         """
         Create a new connection and add it as a frontchannel.
 
@@ -132,12 +132,12 @@ class ChannelManager(StaticConnection):
 
     @contextmanager
     def temporary_channel(
-        self,
-        *,
-        their_vk: Union[bytes, str] = None,
-        recipients: [Union[bytes, str]] = None,
-        routing_keys: [Union[bytes, str]] = None,
-        endpoint: str = None) -> StaticConnection:
+            self,
+            *,
+            their_vk: Union[bytes, str] = None,
+            recipients: [Union[bytes, str]] = None,
+            routing_keys: [Union[bytes, str]] = None,
+            endpoint: str = None) -> StaticConnection:
         """Use 'with' statement to use a temporary channel."""
         channel = self.new_frontchannel(
             their_vk=their_vk, endpoint=endpoint, recipients=recipients,
