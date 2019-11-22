@@ -2,10 +2,10 @@
 from contextlib import contextmanager
 from typing import Dict, Iterable, Union
 import copy
-import hashlib
 import json
 
 from aries_staticagent import StaticConnection, Message, crypto
+from .backchannel import Backchannel
 
 
 def _recipients_from_packed_message(packed_message: bytes) -> Iterable[str]:
@@ -30,7 +30,7 @@ def _recipients_from_packed_message(packed_message: bytes) -> Iterable[str]:
     )
 
 
-class ChannelManager(StaticConnection):
+class Suite:
     """
     Manage connections to agent under test.
 
@@ -38,47 +38,41 @@ class ChannelManager(StaticConnection):
     allowing it to be used as the backchannel.
     """
 
-    def __init__(self, endpoint: str):
-        """
-        Initialize Backchannel static connection using predefined identities.
-
-        Args:
-            endpoint: HTTP URL of test subjects backchannel endpoint
-        """
-        test_suite_keys = crypto.create_keypair(
-            hashlib.sha256(b'aries-protocol-test-suite').digest()
-        )
-        test_subject_vk, _test_subject_sk = crypto.create_keypair(
-            hashlib.sha256(b'aries-protocol-test-subject').digest()
-        )
-        super().__init__(
-            test_suite_keys,
-            their_vk=test_subject_vk,
-            endpoint=endpoint
-        )
-
+    def __init__(self):
         self.frontchannels: Dict[str, StaticConnection] = {}
+        self._backchannel = None
+        self._reply = None
 
     @property
     def backchannel(self):
         """Return a reference to the backchannel (self)."""
-        return self
+        return self._backchannel
 
-    @property
-    def test_suite_vk(self):
-        """Get test_suite_vk."""
-        return self.verkey
+    def set_backchannel(self, backchannel: Backchannel):
+        """Set backchannel."""
+        self._backchannel = backchannel
+
+    @contextmanager
+    def reply(self, handler):
+        """Handle potential to reply."""
+        self._reply = handler
+        yield
+        self._reply = None
 
     async def handle(self, packed_message: bytes):
         """
-        Route an incoming message to self (the backchannel) or to the
-        appropriate frontchannels.
+        Route an incoming message the appropriate frontchannels.
         """
+        # TODO messages in plaintext cannot be routed
+        handled = False
         for recipient in _recipients_from_packed_message(packed_message):
-            if recipient == self.verkey_b58:
-                await super().handle(packed_message)
             if recipient in self.frontchannels:
-                await self.frontchannels[recipient].handle(packed_message)
+                conn = self.frontchannels[recipient]
+                with conn.reply_handler(self._reply):
+                    await conn.handle(packed_message)
+                    handled = True
+        if not handled:
+            raise RuntimeError('Inbound message was not handled')
 
     def new_frontchannel(
             self,
