@@ -7,7 +7,7 @@ from aries_staticagent import Message
 
 class ConnectionsBackchannel(ABC):
     """Backchannel methods for Connections protocol."""
-    async def connections_v1_0_inviter_start(self) -> Message:
+    async def connections_v1_0_inviter_start(self) -> str:
         """Start connections protocol from inviter role."""
         raise NotImplementedError()
 

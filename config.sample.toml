@@ -7,7 +7,7 @@ port = 3000
 
 # Endpoint reported to other agents
 endpoint = "http://localhost:3000"
-backchannel = 'default.OtherBackchannel'
+backchannel = 'default.ManualBackchannel'
 
 # List of regular expressions used to select tests.
 # If a test name matches at least one regex in this list, it will be selected

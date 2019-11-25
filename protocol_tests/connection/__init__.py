@@ -188,7 +188,7 @@ class Invite(Message):
         return '{}?c_i={}'.format(self['serviceEndpoint'], b64_invite)
 
     @classmethod
-    def parse_invite(cls, invite: str):
+    def parse_url(cls, invite: str):
         """Parse an invite url, returning a new message."""
 
         try:
