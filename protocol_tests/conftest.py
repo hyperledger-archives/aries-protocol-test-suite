@@ -16,6 +16,7 @@ import pytest
 from aiohttp import web
 
 from . import Suite
+from .backchannel import SuiteConnectionInfo
 
 # pylint: disable=redefined-outer-name
 
@@ -77,8 +78,8 @@ async def backchannel(config, http_endpoint, suite):
         mod = import_module(mod_path)
         backchannel_class = getattr(mod, class_name)
     else:
-        from default import DefaultBackchannel
-        backchannel_class = DefaultBackchannel
+        from default import ManualBackchannel
+        backchannel_class = ManualBackchannel
 
     suite.set_backchannel(backchannel_class())
     await suite.backchannel.setup(config, suite)
@@ -89,3 +90,18 @@ async def backchannel(config, http_endpoint, suite):
 def temporary_channel(http_endpoint, suite):
     """Get contextmanager for using a temporary channel."""
     yield suite.temporary_channel
+
+
+@pytest.fixture
+async def connection(config, temporary_channel, backchannel):
+    """Fixture for active connection"""
+    with temporary_channel() as conn:
+        info = SuiteConnectionInfo(
+            conn.did,
+            conn.verkey_b58,
+            'test-suite',
+            config['endpoint']
+        )
+        their_info = await backchannel.new_connection(info)
+        conn.update(**their_info._asdict())
+        yield conn

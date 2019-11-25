@@ -3,12 +3,16 @@
 from abc import ABC
 from collections import namedtuple
 
-ConnectionInfo = namedtuple(
-    'ConnectionInfo', 'did, verkey, label, endpoint'
+SuiteConnectionInfo = namedtuple(
+    'SuiteConnectionInfo', 'did, verkey, label, endpoint'
 )
 
 GenerationParameters = namedtuple(
     'GenerationParameters', 'seed, label'
+)
+
+SubjectConnectionInfo = namedtuple(
+    'SubjectConnectionInfo', 'did, recipients, routing_keys, endpoint'
 )
 
 
@@ -38,21 +42,21 @@ class Backchannel(ABC):
 
     async def new_connection(
             self,
-            info: ConnectionInfo,
+            info: SuiteConnectionInfo,
             parameters: GenerationParameters = None
-    ) -> ConnectionInfo:
+    ) -> SubjectConnectionInfo:
         """
         Setup a connection in the agent. This will result in a usable
         Frontchannel for tests.
 
         Args:
-            info (ConnectionInfo): information for the test suite that the
+            info (SuiteConnectionInfo): information for the test suite that the
             agent under test will store.
 
             parameters (GenerationParameters): optional values passed to the
             agent under test to generate their connection information.
 
         Returns:
-            ConnectionInfo: returned connection info from test subject.
+            SubjectConnectionInfo: returned connection info from test subject.
         """
         raise NotImplementedError()

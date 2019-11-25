@@ -1,7 +1,6 @@
 """ Manual Connection Protocol tests.
 """
-import json
-
+from asyncio import wait_for
 import pytest
 
 from reporting import meta
@@ -13,11 +12,9 @@ from .. import interrupt, last, event_message_map, run
 # Inviter:
 
 
-async def _inviter(config, temporary_channel):
+async def _inviter(config, backchannel, temporary_channel):
     """Inviter protocol generator."""
-    invite = Invite.parse_invite(
-        input('Input generated connection invite: ')
-    )
+    invite = Invite.parse_url(await backchannel.connections_v1_0_inviter_start())
 
     yield 'invite', invite
 
@@ -57,9 +54,9 @@ async def _inviter(config, temporary_channel):
 
 
 @pytest.fixture
-async def inviter(config, temporary_channel):
+async def inviter(config, backchannel, temporary_channel):
     """Inviter fixture."""
-    generator = _inviter(config, temporary_channel)
+    generator = _inviter(config, backchannel, temporary_channel)
     yield generator
     await generator.aclose()
 
@@ -122,7 +119,7 @@ async def test_finish_with_trust_ping(inviter):
 
 # Invitee:
 
-async def _invitee(config, temporary_channel):
+async def _invitee(config, backchannel, temporary_channel):
     """Protocol generator for Invitee role."""
     with temporary_channel() as invite_conn:
         invite_verkey_b58 = invite_conn.verkey_b58
@@ -134,15 +131,11 @@ async def _invitee(config, temporary_channel):
         )
 
         yield 'invite', invite_conn, invite
-        print("\n\nInvitation as JSON:", invite.serialize())
 
-        invite_url = invite.to_url()
-        print("\n\nInvitation encoded as URL:", invite_url)
+        with invite_conn.next(Request.TYPE) as next_request:
+            await backchannel.connections_v1_0_invitee_start(invite.to_url())
+            request = Request(await wait_for(next_request, 30))
 
-        request = Request(await invite_conn.await_message(
-            condition=lambda msg: msg.type == Request.TYPE,
-            timeout=30
-        ))
         request.validate()
         yield 'request', invite_conn, request
 
@@ -173,9 +166,9 @@ async def _invitee(config, temporary_channel):
 
 
 @pytest.fixture
-async def invitee(config, temporary_channel):
+async def invitee(config, backchannel, temporary_channel):
     """Invitee fixture."""
-    generator = _invitee(config, temporary_channel)
+    generator = _invitee(config, backchannel, temporary_channel)
     yield generator
     await generator.aclose()
 
