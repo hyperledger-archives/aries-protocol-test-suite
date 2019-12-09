@@ -9,12 +9,14 @@
 import asyncio
 import json
 import os
+from importlib import import_module
 from contextlib import suppress
 
 import pytest
 from aiohttp import web
 
-from . import ChannelManager
+from . import Suite
+from .backchannel import SuiteConnectionInfo
 
 # pylint: disable=redefined-outer-name
 
@@ -35,20 +37,19 @@ def config(pytestconfig):
     yield pytestconfig.suite_config
 
 @pytest.fixture(scope='session')
-def channel_manager(config):
+def suite():
     """Get channel manager for test suite."""
-    manager = ChannelManager(config['subject']['endpoint'])
-    yield manager
+    yield Suite()
 
 @pytest.fixture(scope='session')
-async def http_endpoint(config, channel_manager):
+async def http_endpoint(config, suite):
     """Create http server task."""
 
     async def handle(request):
         """aiohttp handle POST."""
         response = []
-        with channel_manager.reply_handler(response.append):
-            await channel_manager.handle(await request.read())
+        with suite.reply(response.append):
+            await suite.handle(await request.read())
 
         if response:
             return web.Response(body=response.pop())
@@ -69,11 +70,38 @@ async def http_endpoint(config, channel_manager):
 
 
 @pytest.fixture(scope='session')
-def backchannel(http_endpoint, channel_manager): # pylint: disable=unused-argument
+async def backchannel(config, http_endpoint, suite):
     """Get backchannel to test subject."""
-    yield channel_manager.backchannel
+    if 'backchannel' in config and config['backchannel']:
+        path_parts = config['backchannel'].split('.')
+        mod_path, class_name = '.'.join(path_parts[:-1]), path_parts[-1]
+        mod = import_module(mod_path)
+        backchannel_class = getattr(mod, class_name)
+    else:
+        from default import ManualBackchannel
+        backchannel_class = ManualBackchannel
+
+    suite.set_backchannel(backchannel_class())
+    await suite.backchannel.setup(config, suite)
+    yield suite.backchannel
+
 
 @pytest.fixture(scope='session')
-def temporary_channel(http_endpoint, channel_manager):
+def temporary_channel(http_endpoint, suite):
     """Get contextmanager for using a temporary channel."""
-    yield channel_manager.temporary_channel
+    yield suite.temporary_channel
+
+
+@pytest.fixture
+async def connection(config, temporary_channel, backchannel):
+    """Fixture for active connection"""
+    with temporary_channel() as conn:
+        info = SuiteConnectionInfo(
+            conn.did,
+            conn.verkey_b58,
+            'test-suite',
+            config['endpoint']
+        )
+        their_info = await backchannel.new_connection(info)
+        conn.update(**their_info._asdict())
+        yield conn
