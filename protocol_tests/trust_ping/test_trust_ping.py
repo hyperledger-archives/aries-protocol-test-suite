@@ -7,24 +7,14 @@ from aries_staticagent.mtc import (
 )
 from reporting import meta
 from ..schema import MessageSchema
-from voluptuous import Optional, Required
+from voluptuous import Optional
 
 
 @pytest.mark.asyncio
-@meta(protocol='trust_ping', version='0.1', role='*', name='trust-ping-with-response-requested-true')
-async def test_trust_ping_with_response_requested_true(backchannel):
-
-    expected_trust_ping_schema = MessageSchema({
-        "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping",
-        "@id": str,
-        Optional("~timing"): {
-            Optional("out_time"): str,
-            Optional("expires_time"): str,
-            Optional("delay_milli"): int
-        },
-        Optional("comment"): str,
-        "response_requested": bool
-    })
+@meta(protocol='trust_ping', version='0.1',
+      role='receiver', name='responds-to-trust-ping')
+async def test_trust_ping_with_response_requested_true(connection):
+    """Test that subject responds to trust pings."""
 
     expected_trust_pong_schema = MessageSchema({
         "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response",
@@ -43,23 +33,39 @@ async def test_trust_ping_with_response_requested_true(backchannel):
         "response_requested": True
     })
     print('Sending message:', trust_ping.pretty_print())
-    trust_pong = await backchannel.send_and_await_reply_async(
+    trust_pong = await connection.send_and_await_reply_async(
         trust_ping,
         timeout=1
     )
 
     print('Received message:', trust_pong.pretty_print())
-    # is auth crypted?----------------------
-    assert trust_pong.mtc[
-        CONFIDENTIALITY | INTEGRITY | AUTHENTICATED_ORIGIN | DESERIALIZE_OK
-    ]
-    assert not trust_pong.mtc[NONREPUDIATION]
-    # --------------------------------------
+
+    assert trust_pong.mtc.is_authcrypted()
     # are you, you and am I, me?
-    assert trust_pong.mtc.ad['sender_vk'] == crypto.bytes_to_b58(
-        backchannel.their_vk)
-    assert trust_pong.mtc.ad['recip_vk'] == crypto.bytes_to_b58(
-        backchannel.my_vk)
-    # --------------------------------------
+    assert trust_pong.mtc.sender == crypto.bytes_to_b58(
+        connection.recipients[0]
+    )
+    assert trust_pong.mtc.recipient == connection.verkey_b58
+
     assert expected_trust_pong_schema(trust_pong)
-    assert trust_pong['~thread']['thid'] == trust_ping['@id']
+    assert trust_pong['~thread']['thid'] == trust_ping.id
+
+
+@pytest.mark.asyncio
+@meta(protocol='trust_ping', version='0.1',
+      role='sender', name='can-send-trust-ping')
+async def test_trust_ping_sender(backchannel, connection):
+    """Test that subject sends a trust ping."""
+    expected_trust_ping_schema = MessageSchema({
+        "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping",
+        "@id": str,
+        Optional("~timing"): {
+            Optional("out_time"): str,
+            Optional("expires_time"): str,
+            Optional("delay_milli"): int
+        },
+        Optional("comment"): str,
+        "response_requested": bool
+    })
+
+    # TODO Use backchannel to trigger sending of trust ping and test response.
