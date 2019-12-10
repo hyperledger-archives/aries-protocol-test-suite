@@ -8,7 +8,9 @@ Quickstart Guide
 
 - Python 3.6 or higher
 
-### Configuring and Running the Protocol Test Suite
+
+### Installing and configuring the test suite
+
 After cloning this repository, create and activate a virtual environment to
 install dependencies.
 ```sh
@@ -38,6 +40,9 @@ port = 3000
 # Endpoint reported to other agents
 endpoint = "http://localhost:3000"
 
+# Backchannel module
+backchannel = "default.ManualBackchannel"
+
 # List of regular expressions used to select tests.
 # If a test name matches at least one regex in this list, it will be selected
 # for execution.
@@ -53,18 +58,17 @@ version = "1.0.0"
 endpoint="http://localhost:3001"
 ```
 
+
+### Running the test suite
+
 Now that you have your configuration file, you can now run the test suite
 with:
 ```sh
-$ protocoltest
+$ apts
 ```
 
-To list available tests without running the test suite:
-```sh
-$ protocoltest --collect-only --list
-```
-
-Use `protocoltest --help` to see more options:
+Use `apts --help` to see more options (the following is a shortened list; most
+`pytest` command line options are also usable):
 ```
 Aries Protocol Test Suite Configuration:
   --sc=SUITE_CONFIG, --suite-config=SUITE_CONFIG
@@ -77,40 +81,29 @@ Aries Protocol Test Suite Configuration:
   -L, --list            List available tests.
 ```
 
-Writing Tests
--------------
-A simple example of a protocol test can be found in
-[`test_simple_messaging.py`][3]. This test uses the test suite backchannel to
-send and receive a simple test ping message and response.
+A manually operated backchannel is included by default with the test suite. To
+run tests using this backchannel, the `-s` option must be specified, i.e.:
 
-### Async Tests
-Tests follow standard `pytest` conventions. However, due to the asynchronous
-nature of messaging and SDK calls, most tests will likely need to `await` a
-promise and must be marked as asynchronous, e.g.:
+```sh
+$ apts -s
+```
+This will prevent `pytest` from capturing `stdin` and `stdout`.
 
-```python
-@pytest.mark.asyncio
-async def test_method():
-	await some_async_call()
+
+#### Listing available tests
+
+To list available tests without running the test suite:
+```sh
+$ apts --collect-only --list
 ```
 
-### Assigning Test Meta Information
-Tests are assigned meta information to help with test selection and
-interoperability profile reporting. To assign meta information to a test, use
-the `meta` decorator from the [`reporting`](reporting.py) module:
 
-```python
-@pytest.mark.asyncio
-@meta(protocol='test', version='1.0', role='initiator', name='test-this')
-async def test_method():
-	await some_async_call()
-```
+#### Selecting tests
 
-Multiple features can be assigned with a single mark:
+Test selection can be done through the configuration file or with the `-S`
+option. The `-S` takes a regular expression as an argument and selects tests
+based on whether the test name matches that expression.
 
-```python
-@pytest.mark.asyncio
-@pytest.mark.features('my_feature', 'my_other_feature')
-async def test_method():
-	await some_async_call()
+```sh
+$ apts -S connections.*inviter.*
 ```

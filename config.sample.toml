@@ -5,20 +5,27 @@
 host = "localhost"
 port = 3000
 
-# Endpoint reported to other agents
+# Endpoint on which the test suite receives messages. Reported to agent under
+# test when needed.
 endpoint = "http://localhost:3000"
-backchannel = 'default.ManualBackchannel'
+
+# Backchannel module used to facilitate test setup. In typical testing
+# scenarios, the use of a backchannel automates test execution. The default
+# manual backchannel is intended only as an example implementation of
+# a backchannel.
+backchannel = "default.ManualBackchannel"
 
 # List of regular expressions used to select tests.
 # If a test name matches at least one regex in this list, it will be selected
 # for execution.
 tests = [
-    "connections*",
+    "connections.*",
 ]
 
 [config.subject]
-# Name and version reported in interop profile
+# Name and version of the test subject reported in interop profile
 name = "MyAgent"
 version = "1.0.0"
-# Endpoint used for backchannel
+
+# Backchannel endpoint for agent under test.
 endpoint="http://localhost:3001"
