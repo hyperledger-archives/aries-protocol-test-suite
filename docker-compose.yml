@@ -1,0 +1,46 @@
+#
+# Services for running the Aries test suite
+#
+version: '2.1'
+
+services:
+
+  test-suite:
+    container_name: test-suite
+    image: aries-protocol-test-suite
+    command: tail -f /dev/null
+    build:
+      context: test-suite
+    volumes:
+      - ./test-suite/src:/test-suite
+    networks:
+      mylocal:
+
+  ledger-indy:
+    container_name: ledger-indy
+    image: ledger-indy
+    build:
+      context: ledgers/indy
+    command: /bin/bash -c '/home/indy/bin/start-ledger'
+    working_dir: /home/indy
+    ports:
+      - "8000:8000"
+      - "9711:9711"
+      - "9712:9712"
+      - "9713:9713"
+      - "9714:9714"
+      - "9715:9715"
+      - "9716:9716"
+      - "9717:9717"
+      - "9718:9718"
+    networks:
+      mylocal:
+        ipv4_address: 10.5.0.5
+
+networks:
+  mylocal:
+    driver: bridge
+    ipam:
+     config:
+       - subnet: 10.5.0.0/16
+         gateway: 10.5.0.1

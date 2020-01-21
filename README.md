@@ -6,62 +6,42 @@ Quickstart Guide
 
 ### Requirements
 
-- Python 3.6 or higher
+- docker (version 19.03.1 or greater)
+- docker-compose (version 1.24.1 or greater)
+- git
+- make
 
-### Configuring and Running the Protocol Test Suite
-After cloning this repository, create and activate a virtual environment to
-install dependencies.
+### Configuring and running the Protocol Test Suite manually
+
+After cloning this repository, to build the docker images:
 ```sh
-$ python3 -m venv env
-$ source env/bin/activate
+$ make build
 ```
+This will take a while the first time.
 
-Install dependencies and the test suite package with `pip`
+To start the docker containers:
 ```sh
-$ pip install -e .
+$ make start
 ```
+This starts two images:
 
-Copy `config.sample.toml` to `config.toml` and edit as needed for your testing
-scenario.
+1. test-suite
+   This is what runs the test suite.
 
-`config.sample.toml` shows an example configuration and contains comments
-explaining each option:
+2. ledger-indy
+   A test indy ledger used by the IndyProvider.
+   Other non-indy providers may be added as needed.
 
-```toml
-## Aries Protocol Test Suite Sample Configuration ##
-
-[config]
-# HTTP Server options
-host = "localhost"
-port = 3000
-
-# Endpoint reported to other agents
-endpoint = "http://localhost:3000"
-
-# List of regular expressions used to select tests.
-# If a test name matches at least one regex in this list, it will be selected
-# for execution.
-tests = [
-    "connections*",
-]
-
-[config.subject]
-# Name and version reported in interop profile
-name = "MyAgent"
-version = "1.0.0"
-# Endpoint used for backchannel
-endpoint="http://localhost:3001"
-```
-
-Now that you have your configuration file, you can now run the test suite
-with:
+To login to and run the test-suite manually:
 ```sh
-$ protocoltest
+$ make login
+# cp config.sample.toml config.toml
+# run-tests
 ```
 
 To list available tests without running the test suite:
 ```sh
-$ protocoltest --collect-only --list
+# protocoltest --collect-only --list
 ```
 
 Use `protocoltest --help` to see more options:
@@ -77,8 +57,66 @@ Aries Protocol Test Suite Configuration:
   -L, --list            List available tests.
 ```
 
-Writing Tests
--------------
+To stop the docker containers (after exiting the docker login above):
+```sh
+$ make stop
+```
+
+## Writing your own backchannel ##
+
+In order to automate the protocol test suite to run against your agent, you must implement a backchannel 
+that knows how to communicate with your agent to perform certain actions.  This section describes
+how to write your own backchannel.
+
+We assume that you are logged into the test-suite container.  Replace ORG below with the name
+of your company or organization.
+
+1. Copy `default.py` to `ORG.py`.
+
+2. Edit `ORG.py` and change `ManualBackchannel` to `ORGBackChannel`.
+
+3. Edit `config.toml` and customize appropriately including:
+   
+   1. Change `default.ManualBackchannel` to `ORG.ORGBackchannel`.
+
+   2. Customize the `[config.subject]` section such as the `endpoint` variable to point to
+      your agent.
+
+4. Execute `run-tests`.  This will run your new ORGBackChannel class, but still manually.
+
+5. Re-implement each of the functions in a way that is specific to your agent and does not require any manual action.
+   You can do this iteratively, re-running the tests as you go.
+
+6. Once you have finished re-implementing all functions, add support for other protocol families as defined in
+   `protocol_tests` sub-directories.  You can just search for all `backchannel.py` files in these
+   sub-directories which are named according the protocol family.  For example, see `protocol_tests/issue_credential/backchannel.py`
+   for the issue-credential protocol family.
+   
+## Adding the Protocol Test Suite to your CI (Continous Integration) ##
+
+In the github repository for your agent, create a directory structure similar to the following.
+The files `config.toml` and `ORG.py` were described in the previous section.
+
+```
+aries-test/
+   dockerfile
+   src/
+      config.toml  
+      ORG.py
+```
+
+The contents of `dockerfile` are as follows:
+```
+FROM aries-protocol-test-suite
+
+ADD src /test-suite
+```
+The `aries-protocol-test-suite` image must be built locally if running locally, or published to a docker registry to which your CI has access.
+
+TODO: Need to publish to dockerhub.
+
+## Writing more tests
+
 A simple example of a protocol test can be found in
 [`test_simple_messaging.py`][3]. This test uses the test suite backchannel to
 send and receive a simple test ping message and response.

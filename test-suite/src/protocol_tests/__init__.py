@@ -6,6 +6,8 @@ import json
 
 from aries_staticagent import StaticConnection, Message, crypto
 from .backchannel import Backchannel
+from .aries_provider import AriesProvider
+from .indy_provider import IndyProvider
 
 
 def _recipients_from_packed_message(packed_message: bytes) -> Iterable[str]:
@@ -216,3 +218,22 @@ async def run(generator):
     """
     async for _event, *_data in generator:
         pass
+
+
+async def get_provider(config: dict) -> AriesProvider:
+    """
+    Get a provider according to config.
+
+    Parameters:
+    config (dict): The 'type' field specifies the type of provider; the remainder of the config is provider-specific.
+
+    Returns:
+    An AriesProvider object.
+    """
+    providerType = config['type']
+    if providerType == "indy":
+        provider = IndyProvider(config)
+    else:
+        raise Exception("Invalid provider type: {}".format(providerType))
+    await provider.setup()
+    return provider

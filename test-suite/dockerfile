@@ -1,0 +1,73 @@
+FROM ubuntu:18.04
+
+ENV LC_ALL="C.UTF-8"
+ENV LANG="C.UTF-8"
+ENV SHELL="/bin/bash"
+
+# NOTE: If you change the value INDY_SDK_TAG below, be sure to also update the following tags 'indy-ledger/dockerfile':
+#    indy_plenum_ver, indy_node_ver, python3_indy_crypto_ver, indy_crypto_ver, python3_pyzmq_ver
+# You can determine their appropriate values by looking for the same values in the appropriate version of
+# https://github.com/hyperledger/indy-sdk/blob/master/ci/indy-pool.dockerfile
+ARG INDY_SDK_TAG=v1.14.1
+
+# Install base packages
+RUN apt-get update && \
+    apt-get install -y \
+      sudo \
+      pkg-config \
+      libssl-dev \
+      libgmp3-dev \
+      curl \
+      net-tools \
+      build-essential \
+      libsqlite3-dev \
+      cmake \
+      git \
+      apt-transport-https \
+      ca-certificates \
+      maven \
+      debhelper \
+      wget \
+      devscripts \
+      libncursesw5-dev \
+      libzmq3-dev \
+      zip \
+      unzip \
+      jq \
+      vim
+
+# install libsodium
+RUN cd /tmp && \
+    curl https://download.libsodium.org/libsodium/releases/libsodium-1.0.18.tar.gz | tar -xz && \
+    cd /tmp/libsodium-1.0.18 && \
+    ./configure --disable-shared && \
+    make && \
+    make install && \
+    rm -rf /tmp/libsodium-1.0.18
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.36.0
+ENV PATH .:/root/.cargo/bin:$PATH
+
+# Install clippy to the Rust toolchain
+RUN rustup component add clippy
+
+# Clone, build, and set environment variable to point to indy-sdk
+RUN git clone https://github.com/hyperledger/indy-sdk.git -b $INDY_SDK_TAG --single-branch
+RUN cd indy-sdk/libindy && cargo build
+ENV LD_LIBRARY_PATH /indy-sdk/libindy/target/debug
+
+# Install python & pip
+RUN apt install -y software-properties-common
+RUN add-apt-repository ppa:deadsnakes/ppa
+RUN apt install -y python3.7 python3-pip python3-venv
+RUN ln -s /usr/bin/python3 /usr/bin/python
+RUN ln -s /usr/bin/pip3 /usr/bin/pip
+
+ADD src /test-suite
+
+# Setup the test suite
+WORKDIR /test-suite
+RUN python -m venv env
+RUN . env/bin/activate
+RUN pip install -e .
+
+CMD ["/bin/bash","-c","/test-suite/run-tests"]

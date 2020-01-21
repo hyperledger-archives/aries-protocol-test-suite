@@ -1,0 +1,26 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+   echo "Usage: download-indy-sdk-and-build-indy-pool <version>"
+   exit 1
+fi
+
+set -e
+
+VERSION=$1
+PROJECT_DIR=$(dirname $(cd $(dirname "$0");pwd))
+DOWNLOAD_DIR=$PROJECT_DIR/test-suite
+
+cd $DOWNLOAD_DIR
+
+if [ -d indy-sdk ]; then
+    CUR_VERSION=`cd indy-sdk; git tag`
+    if [ "$VERSION" != "$CUR_VERSION" ]; then 
+       echo "Deleting version $CUR_VERSION of indy-sdk ..."
+       rm -rf indy-sdk
+    fi
+fi
+
+if [ ! -d indy-sdk ]; then
+    git clone https://github.com/hyperledger/indy-sdk -b $VERSION --single-branch --depth=1
+fi

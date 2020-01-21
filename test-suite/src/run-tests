@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# Run all tests (and "-x" to stop after the first failure)
+protocoltest -s

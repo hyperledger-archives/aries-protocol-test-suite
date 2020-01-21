@@ -1,0 +1,58 @@
+FROM indy-pool
+
+RUN echo "[supervisord]\n\
+logfile = /tmp/supervisord.log\n\
+logfile_maxbytes = 50MB\n\
+logfile_backups=10\n\
+logLevel = error\n\
+pidfile = /tmp/supervisord.pid\n\
+nodaemon = true\n\
+minfds = 1024\n\
+minprocs = 200\n\
+umask = 022\n\
+user = indy\n\
+identifier = supervisor\n\
+directory = /tmp\n\
+nocleanup = true\n\
+childlogdir = /tmp\n\
+strip_ansi = false\n\
+\n\
+[program:node1]\n\
+command=start_indy_node Node1 0.0.0.0 9711 0.0.0.0 9712\n\
+directory=/home/indy\n\
+stdout_logfile=/tmp/node1.log\n\
+stderr_logfile=/tmp/node1.log\n\
+\n\
+[program:node2]\n\
+command=start_indy_node Node2 0.0.0.0 9713 0.0.0.0 9714\n\
+directory=/home/indy\n\
+stdout_logfile=/tmp/node2.log\n\
+stderr_logfile=/tmp/node2.log\n\
+\n\
+[program:node3]\n\
+command=start_indy_node Node3 0.0.0.0 9715 0.0.0.0 9716\n\
+directory=/home/indy\n\
+stdout_logfile=/tmp/node3.log\n\
+stderr_logfile=/tmp/node3.log\n\
+\n\
+[program:node4]\n\
+command=start_indy_node Node4 0.0.0.0 9717 0.0.0.0 9718\n\
+directory=/home/indy\n\
+stdout_logfile=/tmp/node4.log\n\
+stderr_logfile=/tmp/node4.log\n\
+\n\
+[program:fileservice]\n\
+command=python -m SimpleHTTPServer 8000\n\
+directory=/var/lib/indy\n\
+stdout_logfile=/tmp/fileservice.log\n\
+stderr_logfile=/tmp/fileservice.log\n"\
+>> /etc/supervisord.conf
+
+RUN awk '{if (index($1, "NETWORK_NAME") != 0) {print("NETWORK_NAME = \"sandbox\"")} else print($0)}' /etc/indy/indy_config.py> /tmp/indy_config.py
+RUN mv /tmp/indy_config.py /etc/indy/indy_config.py
+RUN echo "logLevel=0" >> /etc/indy/indy_config.py
+
+COPY bin/* /home/indy/bin/
+
+EXPOSE 9711 9712 9713 9714 9715 9716 9717 9718 8000
+

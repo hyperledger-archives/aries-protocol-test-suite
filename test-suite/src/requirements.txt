@@ -1,5 +1,6 @@
 aiohttp
 aries-staticagent==0.7.0
+python3-indy==1.14.1
 pytest>=4.3.0
 pytest-asyncio
 voluptuous
