@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ $# -ne 1 ]; then
-   echo "Usage: download-indy-sdk-and-build-indy-pool <version>"
+   echo "Usage: download-indy-sdk <version>"
    exit 1
 fi
 

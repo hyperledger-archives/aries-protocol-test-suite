@@ -1,14 +1,10 @@
 FROM ubuntu:18.04
 
+ARG INDY_SDK_TAG=v1.14.1
+
 ENV LC_ALL="C.UTF-8"
 ENV LANG="C.UTF-8"
 ENV SHELL="/bin/bash"
-
-# NOTE: If you change the value INDY_SDK_TAG below, be sure to also update the following tags 'indy-ledger/dockerfile':
-#    indy_plenum_ver, indy_node_ver, python3_indy_crypto_ver, indy_crypto_ver, python3_pyzmq_ver
-# You can determine their appropriate values by looking for the same values in the appropriate version of
-# https://github.com/hyperledger/indy-sdk/blob/master/ci/indy-pool.dockerfile
-ARG INDY_SDK_TAG=v1.14.1
 
 # Install base packages
 RUN apt-get update && \
@@ -51,7 +47,7 @@ ENV PATH .:/root/.cargo/bin:$PATH
 RUN rustup component add clippy
 
 # Clone, build, and set environment variable to point to indy-sdk
-RUN git clone https://github.com/hyperledger/indy-sdk.git -b $INDY_SDK_TAG --single-branch
+RUN git clone https://github.com/hyperledger/indy-sdk.git -b $INDY_SDK_TAG --single-branch --depth=1
 RUN cd indy-sdk/libindy && cargo build
 ENV LD_LIBRARY_PATH /indy-sdk/libindy/target/debug
 
