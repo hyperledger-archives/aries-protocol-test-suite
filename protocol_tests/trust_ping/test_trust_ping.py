@@ -1,13 +1,18 @@
+"""Trust Ping tests."""
+
+import asyncio
+
 import pytest
+from voluptuous import Optional
 
 from aries_staticagent import Message, crypto
 from aries_staticagent.mtc import (
     CONFIDENTIALITY, INTEGRITY, AUTHENTICATED_ORIGIN,
     DESERIALIZE_OK, NONREPUDIATION
 )
+
 from reporting import meta
 from ..schema import MessageSchema
-from voluptuous import Optional
 
 
 @pytest.mark.asyncio
@@ -18,7 +23,7 @@ async def test_trust_ping_with_response_requested_true(connection):
 
     expected_trust_pong_schema = MessageSchema({
         "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response",
-        Optional("@id"): str,
+        "@id": str,
         "~thread": {"thid": str},
         Optional("~timing"): {
             Optional("in_time"): str,
@@ -32,13 +37,13 @@ async def test_trust_ping_with_response_requested_true(connection):
         # "@id" is added by the staticagent lib
         "response_requested": True
     })
-    print('Sending message:', trust_ping.pretty_print())
+    #print('Sending message:', trust_ping.pretty_print())
     trust_pong = await connection.send_and_await_reply_async(
         trust_ping,
         timeout=1
     )
 
-    print('Received message:', trust_pong.pretty_print())
+    #print('Received message:', trust_pong.pretty_print())
 
     assert trust_pong.mtc.is_authcrypted()
     # are you, you and am I, me?
@@ -68,4 +73,18 @@ async def test_trust_ping_sender(backchannel, connection):
         "response_requested": bool
     })
 
-    # TODO Use backchannel to trigger sending of trust ping and test response.
+    with connection.next() as next_msg:
+        await backchannel.trust_ping_v1_0_send_ping(connection)
+        msg = await asyncio.wait_for(next_msg, 5)
+
+    assert expected_trust_ping_schema(msg)
+    assert msg.mtc.is_authcrypted()
+    assert msg.mtc.sender == crypto.bytes_to_b58(connection.recipients[0])
+    assert msg.mtc.recipient == connection.verkey_b58
+
+    await connection.send_async({
+        "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response",
+        "~thread": {"thid": msg.id},
+    })
+
+    # TODO Backchannel verify reciept?
