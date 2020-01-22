@@ -20,6 +20,7 @@ from .backchannel import SuiteConnectionInfo
 
 # pylint: disable=redefined-outer-name
 
+
 @pytest.fixture(scope='session')
 def event_loop():
     """ Create a session scoped event loop.
@@ -36,10 +37,12 @@ def config(pytestconfig):
     """
     yield pytestconfig.suite_config
 
+
 @pytest.fixture(scope='session')
 def suite():
     """Get channel manager for test suite."""
     yield Suite()
+
 
 @pytest.fixture(scope='session')
 async def http_endpoint(config, suite):
@@ -84,6 +87,20 @@ async def backchannel(config, http_endpoint, suite):
     suite.set_backchannel(backchannel_class())
     await suite.backchannel.setup(config, suite)
     yield suite.backchannel
+
+
+@pytest.fixture(scope='session')
+async def provider(config, suite):
+    """Get provider to test subject."""
+    if not 'provider' in config and not config['provider']:
+        raise "No 'provider' was specified in the config file"
+    path_parts = config['provider'].split('.')
+    mod_path, class_name = '.'.join(path_parts[:-1]), path_parts[-1]
+    mod = import_module(mod_path)
+    provider_class = getattr(mod, class_name)
+    suite.set_provider(provider_class())
+    await suite.provider.setup(config)
+    yield suite.provider
 
 
 @pytest.fixture(scope='session')

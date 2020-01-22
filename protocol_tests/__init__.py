@@ -6,6 +6,7 @@ import json
 
 from aries_staticagent import StaticConnection, Message, crypto
 from .backchannel import Backchannel
+from .provider import Provider
 
 
 def _recipients_from_packed_message(packed_message: bytes) -> Iterable[str]:
@@ -41,6 +42,7 @@ class Suite:
     def __init__(self):
         self.frontchannels: Dict[str, StaticConnection] = {}
         self._backchannel = None
+        self._provider = None
         self._reply = None
 
     @property
@@ -51,6 +53,15 @@ class Suite:
     def set_backchannel(self, backchannel: Backchannel):
         """Set backchannel."""
         self._backchannel = backchannel
+
+    @property
+    def provider(self):
+        """Return a reference to the provider (self)."""
+        return self._provider
+
+    def set_provider(self, provider: Provider):
+        """Set provider."""
+        self._provider = provider
 
     @contextmanager
     def reply(self, handler):
