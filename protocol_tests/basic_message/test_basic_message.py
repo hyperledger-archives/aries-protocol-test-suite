@@ -27,6 +27,7 @@ MSG_VALID = MessageSchema({
     'content': str
 })
 
+
 def timestamp():
     """Return UTC in ISO 8601 format."""
     return datetime.datetime.utcnow().isoformat()
@@ -54,7 +55,9 @@ async def test_receiver(backchannel, connection):
     })
     assert MSG_VALID(msg)
     await connection.send_async(msg)
-    reported = await backchannel.basic_message_v1_0_last_received_message()
+    reported = await backchannel.basic_message_v1_0_get_message(
+        connection, msg.id
+    )
     assert content == reported
 
 
@@ -66,7 +69,7 @@ async def test_sender(backchannel, connection):
     content = random_string()
 
     with connection.next() as next_msg:
-        await backchannel.basic_message_v1_0_send_message(content)
+        await backchannel.basic_message_v1_0_send_message(connection, content)
         msg = await asyncio.wait_for(next_msg, 30)
 
     assert MSG_VALID(msg)
@@ -91,7 +94,7 @@ async def test_no_locale(connection):
 @pytest.mark.asyncio
 @meta(protocol='basicmessage', version='1.0', role='receiver',
       name='reports-no-sent-time')
-async def test_no_sent_time(backchannel, connection):
+async def test_no_sent_time(connection):
     """Agent under test sends problem report on missing sent time."""
     with connection.next() as next_msg:
         await connection.send_async(Message({
@@ -102,10 +105,11 @@ async def test_no_sent_time(backchannel, connection):
         msg = await asyncio.wait_for(next_msg, 5)
     assert msg.type == PROBLEM
 
+
 @pytest.mark.asyncio
 @meta(protocol='basicmessage', version='1.0', role='receiver',
       name='reports-no-content')
-async def test_no_content(backchannel, connection):
+async def test_no_content(connection):
     """Agent under test sends problem report on missing content."""
     with connection.next() as next_msg:
         await connection.send_async(Message({
