@@ -22,7 +22,9 @@ async def requester(backchannel, connection, query, comment):
     connection.route_module(handler)
     count = handler.query_message_count
     # Now tell the agent under test to send a query message
-    resp = await backchannel.discover_features_v1_0_requester_start(connection.verkey_b58, query, comment)
+    await backchannel.discover_features_v1_0_requester_start(
+        connection, query, comment
+    )
     # Make sure an additional message was received
     assert handler.query_message_count == count + 1
 
