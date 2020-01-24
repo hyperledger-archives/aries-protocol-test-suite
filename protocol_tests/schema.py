@@ -69,12 +69,13 @@ class MessageSchema():
 
 
             shoulds = Should.find_in(self.schema)
-            missing_shoulds = shoulds - (validated_key_set & shoulds)
-            if missing_shoulds:
-                logger.warning(
-                    'SHOULD be present but are missing: %s',
-                    ', '.join(sorted(missing_shoulds))
-                )
+            if shoulds:
+                missing_shoulds = shoulds - (validated_key_set & shoulds)
+                if missing_shoulds:
+                    logger.warning(
+                        'SHOULD be present but are missing: %s',
+                        ', '.join(sorted(missing_shoulds))
+                    )
 
             return validated
 
