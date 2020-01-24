@@ -1,5 +1,4 @@
 """Schema helpers."""
-from functools import reduce
 import logging
 
 from voluptuous import Schema, Optional, REMOVE_EXTRA, PREVENT_EXTRA
@@ -7,7 +6,7 @@ from voluptuous.error import Invalid, MultipleInvalid
 
 
 class ValidationError(Exception):
-    """When errors on validation"""
+    """When errors on validation."""
     def __init__(self, error: Invalid):
         if isinstance(error, MultipleInvalid) and len(error.errors) > 1:
             super().__init__(
@@ -35,7 +34,7 @@ def _dict_key_set(dct, prepend=''):
     return key_set
 
 
-class MessageSchema():
+class MessageSchema():  # pylint: disable=too-few-public-methods
     """
     Wrap validation for messages to ensure they are passed as dictionaries.
 
@@ -43,8 +42,11 @@ class MessageSchema():
     nested objects into messages which fails when no `@type` attribute is
     available.
 
-    Also wrap errors into collected Validation error and raise extra key errors
-    as warnings instead of exceptions.
+    When `allow_extra` is True, unexpected attributes are removed from the
+    validated message and a warning is logged.
+
+    If `Should` keys are found, the validated message is checked for missing
+    `Should` keys and a warning is logged for each missing.
     """
     __slots__ = ('schema', 'validator', 'extra')
 
@@ -107,24 +109,26 @@ class AtLeastOne():  # pylint: disable=too-few-public-methods
         raise Invalid('Item matching schema not found in collection')
 
 
-class Should(Optional):
+class Should(Optional):  # pylint: disable=too-few-public-methods
     """Validator for items described as 'SHOULD' be present and not 'MUST'.
 
-    Emits a warning but does not fail.
+    Behaves the same as `Optional`.
     """
     def __init__(self, key, msg=None, description=None):
         super().__init__(key, msg=msg, description=description)
 
     @classmethod
     def find_in(cls, dct, path_prepend=''):
-        """Iterate through dictionary and call func on each WasNotPresent."""
-        should_be_set = set()
+        """Recursively descend through dictionary, finding each key marked as
+        'Should'.
+        """
+        should_set = set()
         for key in dct.keys():
             key_path = '.'.join([
                 item for item in [path_prepend, str(key)] if item
             ])
             if isinstance(key, cls):
-                should_be_set.add(key_path)
+                should_set.add(key_path)
             if isinstance(dct[key], dict):
-                should_be_set.update(cls.find_in(dct[key], key_path))
-        return should_be_set
+                should_set.update(cls.find_in(dct[key], key_path))
+        return should_set
