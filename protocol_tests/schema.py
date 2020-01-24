@@ -2,14 +2,14 @@
 from functools import reduce
 import logging
 
-from voluptuous import Schema
+from voluptuous import Schema, Optional, REMOVE_EXTRA, PREVENT_EXTRA
 from voluptuous.error import Invalid, MultipleInvalid
 
 
 class ValidationError(Exception):
     """When errors on validation"""
     def __init__(self, error: Invalid):
-        if isinstance(error, MultipleInvalid):
+        if isinstance(error, MultipleInvalid) and len(error.errors) > 1:
             super().__init__(
                 'Multiple errors found during validation:\n\t' +
                 ('\n\t'.join(
@@ -25,16 +25,14 @@ class ValidationError(Exception):
             )
 
 
-def log_unexpected(error):
-    path = ' @ message[%s]' % ']['.join(map(repr, error.path)) \
-        if error.path else ''
-    logging.getLogger(__name__).warning(
-        'Unexpected Message key found{}'.format(path)
-    )
-
-
-def is_extra_key_error(error):
-    return error.error_message == 'extra keys not allowed'
+def _dict_key_set(dct, prepend=''):
+    key_set = set()
+    for key in dct.keys():
+        key_path = '.'.join([item for item in [prepend, key] if item])
+        key_set.add(key_path)
+        if isinstance(dct[key], dict):
+            key_set.update(_dict_key_set(dct[key], prepend=key_path))
+    return key_set
 
 
 class MessageSchema():
@@ -48,48 +46,40 @@ class MessageSchema():
     Also wrap errors into collected Validation error and raise extra key errors
     as warnings instead of exceptions.
     """
-    __slots__ = ('schema', 'validator', 'allow_extra')
+    __slots__ = ('schema', 'validator', 'extra')
 
     def __init__(self, schema, allow_extra=True):
         self.schema = schema
-        self.validator = Schema(schema)
-        self.allow_extra = allow_extra
+        self.extra = REMOVE_EXTRA if allow_extra else PREVENT_EXTRA
+        self.validator = Schema(schema, extra=self.extra)
+
 
     def __call__(self, msg):
-        __tracebackhide__ = True
+        logger = logging.getLogger(__name__)
         try:
-            return self.validator(dict(msg))
-        except MultipleInvalid as error:
-            if self.allow_extra:
-                def split(acc, error):
-                    extra_errors, not_extra_errors = acc
-                    if is_extra_key_error(error):
-                        extra_errors.append(error)
-                    else:
-                        not_extra_errors.append(error)
-                    return (extra_errors, not_extra_errors)
+            validated = self.validator(dict(msg))
+            validated_key_set = _dict_key_set(validated)
+            if self.extra == REMOVE_EXTRA:
+                removed = _dict_key_set(msg) - validated_key_set
+                if removed:
+                    logger.warning(
+                        'Unexpected message keys found: %s',
+                        ', '.join(sorted(removed))
+                    )
 
-                extra_errors, not_extra_errors = reduce(
-                    split, error.errors, ([], [])
+
+            shoulds = Should.find_in(self.schema)
+            missing_shoulds = shoulds - (validated_key_set & shoulds)
+            if missing_shoulds:
+                logger.warning(
+                    'SHOULD be present but are missing: %s',
+                    ', '.join(sorted(missing_shoulds))
                 )
 
-                list(map(log_unexpected, extra_errors))
+            return validated
 
-                if not_extra_errors:
-                    # Re-raise the rest
-                    raise ValidationError(
-                        MultipleInvalid(not_extra_errors)
-                    )
-            else:
-                raise ValidationError(error)
-        except Invalid as error:
-            if self.allow_extra:
-                if is_extra_key_error(error):
-                    log_unexpected(error)
-                else:
-                    raise ValidationError(error)
-            else:
-                raise ValidationError(error)
+        except Invalid as err:
+            raise ValidationError(err) from err
 
 
 def is_valid(validator, value):
@@ -114,3 +104,26 @@ class AtLeastOne():  # pylint: disable=too-few-public-methods
         if self.msg:
             raise Invalid(self.msg)
         raise Invalid('Item matching schema not found in collection')
+
+
+class Should(Optional):
+    """Validator for items described as 'SHOULD' be present and not 'MUST'.
+
+    Emits a warning but does not fail.
+    """
+    def __init__(self, key, msg=None, description=None):
+        super().__init__(key, msg=msg, description=description)
+
+    @classmethod
+    def find_in(cls, dct, path_prepend=''):
+        """Iterate through dictionary and call func on each WasNotPresent."""
+        should_be_set = set()
+        for key in dct.keys():
+            key_path = '.'.join([
+                item for item in [path_prepend, str(key)] if item
+            ])
+            if isinstance(key, cls):
+                should_be_set.add(key_path)
+            if isinstance(dct[key], dict):
+                should_be_set.update(cls.find_in(dct[key], key_path))
+        return should_be_set
