@@ -21,7 +21,8 @@ backchannel = 'default.ManualBackchannel'
 
 # List of regular expressions used to select tests.
 # If a test name matches at least one regex in this list, it will be selected
-# for execution.
+# for execution. matches the @meta data in the desired tests, 
+# for example 'connections,1.0,inviter,response-post-sig-verify-valid'.
 tests = [
     "connections.*",
     "discover-features.*",
@@ -29,7 +30,7 @@ tests = [
 ]
 
 [config.subject]
-# Name and version reported in interop profile
+# Name and version reported in interop profile of test subject
 name = "MyAgent"
 version = "1.0.0"
 # Endpoint used for backchannel

@@ -105,19 +105,24 @@ class DIDDoc(dict):
         })
 
     @classmethod
-    def parse_key_reference(cls, key: str):
+    def is_reference(cls, key: str):
         """Parse out a key reference if present; return the key otherwise."""
-        parts = key.split("#")
-        return parts[1] if len(parts) > 1 else parts[0]
+        return '#' in key
 
-    def key_for_reference(self, key: str) -> Optional(str):
-        """Find key matching reference."""
-        key = self.parse_key_reference(key)
+    def dereference_key(self, key: str) -> str:
+        """Dereference a key from the publicKey array.
+
+        If key is not a reference, simply return the key.
+        """
+        if not self.is_reference(key):
+            return key
+
+        key_reference = key
         found_key = next((
-            public_key['publicKeyBase58']
-            for public_key in self.get('publicKey', [])
-            if key in (public_key['id'], public_key['publicKeyBase58'])
-        ), None)
+            public_key['publicKeyBase58']  # Get the first publicKeyBase58
+            for public_key in self.get('publicKey', [])  # out of publicKey
+            if key_reference == public_key['id']  # Where the reference matches the id
+        ), None)  # or return None
 
         if not found_key:
             raise KeyReferenceError(
@@ -142,11 +147,11 @@ class DIDDoc(dict):
             # self['publicKey'][0]['controller'],  # did
             service['serviceEndpoint'],  # endpoint
             list(map(
-                self.key_for_reference,
+                self.dereference_key,
                 service.get('recipientKeys', [])
             )),
             list(map(
-                self.key_for_reference,
+                self.dereference_key,
                 service.get('routingKeys', [])
             )),
         )
