@@ -14,9 +14,8 @@ class Handler(Module):
     DOC_URI = "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/"
     PROTOCOL = "issue-credential"
     VERSION = "1.0"
-
-    PID = "{}{}/{}".format(DOC_URI, PROTOCOL, VERSION)
     ROLES = ["issuer", "holder"]
+    IC_PID = "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0"
 
     def __init__(self, provider):
         super().__init__()
@@ -33,7 +32,7 @@ class Handler(Module):
         self.events = []
         self.attrs = None
 
-    @route("{}/{}".format(PID, "propose-credential"))
+    @route("{}/propose-credential".format(IC_PID))
     async def propose_credential(self, msg, conn):
         """Handle a propose-credential message. """
         # TODO: implement
@@ -53,10 +52,10 @@ class Handler(Module):
         preview_attrs = self.attrs_to_preview_attrs(attrs)
         msg = Message({
             "@id": id,
-            "@type": self.type("offer-credential"),
+            "@type": "{}/offer-credential".format(self.IC_PID),
             'comment': "Credential offer from aries-protocol-test-suite",
             'credential_preview': {
-                '@type': 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0/credential-preview',
+                '@type': '{}/credential-preview'.format(self.IC_PID),
                 'attributes': preview_attrs,
             },
             'offers~attach': [
@@ -72,14 +71,14 @@ class Handler(Module):
         await conn.send_async(msg)
         return id
 
-    @route("{}/{}".format(PID, "offer-credential"))
+    @route("{}/offer-credential".format(IC_PID))
     async def handle_offer_credential(self, msg, conn):
         """Handle an offer-credential message. """
         # Verify the format of the offer-credential message
-        self.verify_msg('offer-credential', msg, conn, {
+        self._ic_verify_msg('offer-credential', msg, conn, {
             Optional('comment'): str,
             'credential_preview': {
-                '@type': 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0/credential-preview',
+                '@type': '{}/credential-preview'.format(self.IC_PID),
                 'attributes': [
                     {
                         "name": str,
@@ -101,15 +100,15 @@ class Handler(Module):
         offer_attach = msg['offers~attach'][0]['data']['base64']
         # Call the provider to create the credential request
         (request_attach, passback) = await self.provider.issue_credential_v1_0_holder_create_credential_request(offer_attach)
-        id = msg['@id']
+        thid = self.thid(msg)
         # Send the request-credential message and wait for the reply
         msg = await conn.send_and_await_reply_async({
-            "@type": self.type("request-credential"),
-            "~thread": {"thid": id},
+            "@type": "{}/request-credential".format(self.IC_PID),
+            "~thread": {"thid": thid},
             "comment": "some comment",
             "requests~attach": [
                 {
-                    "@id": id,
+                    "@id": self.make_uuid(),
                     "mime-type": "application/json",
                     "data": {
                         "base64": request_attach
@@ -117,7 +116,7 @@ class Handler(Module):
                 },
             ]
         })
-        self.verify_msg('issue-credential', msg, conn, {
+        self._ic_verify_msg('issue-credential', msg, conn, {
             Optional('comment'): str,
             'credentials~attach': [
                 {
@@ -133,11 +132,11 @@ class Handler(Module):
         await self.provider.issue_credential_v1_0_holder_store_credential(cred_attach, passback)
         self.add_event("credential_stored")
 
-    @route("{}/{}".format(PID, "request-credential"))
+    @route("{}/request-credential".format(IC_PID))
     async def handle_request_credential(self, msg, conn):
         """Handle a request-credential message. """
         # Verify the request-credential message
-        self.verify_msg('request-credential', msg, conn, {
+        self._ic_verify_msg('request-credential', msg, conn, {
             Optional('comment'): str,
             'requests~attach': [
                 {
@@ -152,15 +151,15 @@ class Handler(Module):
         req_attach = msg['requests~attach'][0]['data']['base64']
         # Call the provider to create the credential
         cred_attach = await self.provider.issue_credential_v1_0_issuer_create_credential(self.offer, req_attach, self.attrs)
-        id = msg['@id']
+        thid = self.thid(msg)
         # Send the issue-credential message and wait for the reply
         msg = await conn.send_async({
-            "@type": self.type("issue-credential"),
-            "~thread": {"thid": id},
+            "@type": "{}/issue-credential".format(self.IC_PID),
+            "~thread": {"thid": thid},
             "comment": "some comment",
             "credentials~attach": [
                 {
-                    "@id": id,
+                    "@id": self.make_uuid(),
                     "mime-type": "application/json",
                     "data": {
                         "base64": cred_attach
@@ -170,11 +169,11 @@ class Handler(Module):
         })
         self.add_event("issued")
 
-    def verify_msg(self, typ, msg, conn, schema):
+    def _ic_verify_msg(self, typ, msg, conn, schema):
         assert msg.mtc.is_authcrypted()
         assert msg.mtc.sender == crypto.bytes_to_b58(conn.recipients[0])
         assert msg.mtc.recipient == conn.verkey_b58
-        schema['@type'] = str(self.type(typ))
+        schema['@type'] = "{}/{}".format(self.IC_PID, typ)
         schema['@id'] = str
         msg_schema = MessageSchema(schema)
         msg_schema(msg)
@@ -190,3 +189,9 @@ class Handler(Module):
                 "value": value,
             })
         return result
+
+    def thid(self, msg) -> str:
+        if "~thread" in msg:
+            return msg["~thread"]["thid"]
+        return msg["@id"]
+

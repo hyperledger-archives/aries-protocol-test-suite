@@ -1,9 +1,4 @@
-import json
-import aiohttp
-import base64
-import time
-import sys
-import hashlib
+import json, aiohttp, base64, time, sys, hashlib, random, string
 
 from protocol_tests.provider import Provider
 from protocol_tests.issue_credential.provider import IssueCredentialProvider
@@ -96,6 +91,163 @@ class IndyProvider(Provider, IssueCredentialProvider):
         pb = store_credential_passback
         await anoncreds.prover_store_credential(self.wallet, None, pb["req_metadata"], cred, pb["cred_def"], None)
 
+    async def present_proof_v1_0_verifier_request_presentation(self, proof_req: dict) -> (str, str):
+        proof_req['nonce'] = self._nonce()
+        proof_req_json = json.dumps(proof_req)
+        attach = base64.b64encode(proof_req_json.encode()).decode()
+        return attach, proof_req_json
+
+    async def present_proof_v1_0_prover_create_presentation(self, b64_request_attach) -> str:
+        proof_req_json = base64.b64decode(b64_request_attach).decode()
+        # Get the creds for the request from the prover's wallet
+        creds_json = await anoncreds.prover_get_credentials_for_proof_req(self.wallet, proof_req_json)
+        creds = json.loads(creds_json)
+        # Prepare to generate proof from the request and creds in our wallet
+        proof_req = json.loads(proof_req_json)
+        sa_attrs = proof_req.get('self_attested_attributes', {})
+        pr_req_attrs = proof_req.get('requested_attributes', {})
+        pr_req_preds = proof_req.get('requested_predicates', {})
+        my_creds = {}
+        req_attrs = {}
+        req_preds = {}
+        for ref in pr_req_attrs:  # for all requested attributes
+            restrictions = pr_req_attrs[ref].get('restrictions')
+            attrCreds = creds['attrs'][ref]
+            found = False
+            for attrCred in attrCreds:
+                ci = attrCred['cred_info']
+                found = True
+                my_creds[ref] = ci
+                if restrictions:
+                    req_attrs[ref] = {
+                        'cred_id': ci['referent'], 'revealed': True}
+            if not restrictions and not ref in sa_attrs:
+                raise Exception(
+                    "Missing value for self-attested attribute '{}'".format(ref))
+        creds = json.loads(creds_json)
+        for ref in pr_req_preds:  # for all requested predicates
+            predCreds = creds['predicates'][ref]
+            for predCred in predCreds:
+                ci = predCred['cred_info']
+                my_creds[ref] = ci
+                if restrictions:
+                    req_preds[ref] = {'cred_id': ci['referent']}
+        schemas_json, cred_defs_json, revoc_states_json = await self._prover_get_entities_from_ledger(my_creds)
+        my_creds_json = json.dumps({
+            'self_attested_attributes': sa_attrs,
+            'requested_attributes': req_attrs,
+            'requested_predicates': req_preds,
+        })
+        proof_json = await anoncreds.prover_create_proof(
+            self.wallet, proof_req_json, my_creds_json,
+            self.master_secret_id, schemas_json, cred_defs_json,
+            revoc_states_json)
+        b64_proof_attach = base64.b64encode(proof_json.encode()).decode()
+        return b64_proof_attach
+
+    async def present_proof_v1_0_verifier_verify_presentation(self, b64_proof: str, proof_req_json: str) -> dict:
+        proof_json = base64.b64decode(b64_proof).decode()
+        proof_req = json.loads(proof_req_json)
+        proof = json.loads(proof_json)
+        entities = await self._verifier_get_entities_from_ledger(proof)
+        schemas_json = json.dumps(entities['schemas'])
+        cred_defs_json = json.dumps(entities['cred_defs'])
+        revoc_reg_defs_json = json.dumps(entities['revoc_reg_defs'])
+        revoc_regs_json = json.dumps(entities['revoc_regs'])
+        await anoncreds.verifier_verify_proof(
+                proof_req_json, proof_json, schemas_json, cred_defs_json,
+                revoc_reg_defs_json, revoc_regs_json)
+        return self._get_proof_info(proof_req, proof)
+
+    def _get_proof_info(self, proof_req: dict, proof: dict) -> dict:
+        identifiers = proof['identifiers']
+        proofs = proof['proof']['proofs']
+        attributes = []
+        predicates = []
+        # Add attested attributes and predicates
+        for index in range(len(identifiers)):
+            credDefId = identifiers[index]['cred_def_id']
+            primaryProof = proofs[index]['primary_proof']
+            for proofType in primaryProof:
+                ptEle = primaryProof[proofType]
+                if 'revealed_attrs' in ptEle:
+                    revealedAttrs = ptEle['revealed_attrs']
+                    for name in revealedAttrs:
+                        attributes.append({
+                            'name': name,
+                            'value': revealedAttrs[name],
+                            'cred_def_id': credDefId,
+                        })
+                for cmpProof in ptEle:
+                    if 'predicate' in cmpProof:
+                        predicates.append({
+                            'predicate': self._predicate_str(cmpProof['predicate']),
+                            'cred_def_id': credDefId,
+                        })
+        # For each attribute, replace the hash with the raw value
+        revealed_attrs = proof['requested_proof']['revealed_attrs']
+        for attr in attributes:
+            attr['value'] = self._get_raw_for_hash(attr['value'], revealed_attrs)
+        # Add self-attested attributes
+        sa_attrs = proof['requested_proof']['self_attested_attrs']
+        for name, val in sa_attrs.items():
+            name = proof_req['requested_attributes'][name]['name']
+            attributes.append({'name': name,'value': val})
+        proofInfo = {
+            'attributes': attributes,
+            'predicates': predicates,
+        }
+        return proofInfo
+
+    def _get_raw_for_hash(self, hash, revealed_attrs) -> str:
+        for _, rattr in revealed_attrs.items():
+            if rattr['encoded'] == hash:
+                raw = rattr['raw']
+                return raw
+        raise Exception("Hash {} was not found in proof".format(hash))
+
+    def _predicate_str(self, predicate: dict) -> str:
+        if predicate.keys() >= {'attr_name', 'p_type', 'value'}:
+            return '{} {} {}'.format(predicate['attr_name'], predicate['p_type'], predicate['value'])
+        else:
+            return json.dumps(predicate, indent=4, sort_keys=True)
+
+    async def _verifier_get_entities_from_ledger(self, proof: dict) -> dict:
+        schemas = {}
+        cred_defs = {}
+        revoc_reg_defs = {}
+        revoc_regs = {}
+        for item in proof['identifiers']:
+            schemaID = item['schema_id']
+            (received_schema_id, received_schema) = await self._get_schema(schemaID)
+            schemas[received_schema_id] = json.loads(received_schema)
+            credDefID = item['cred_def_id']
+            (received_cred_def_id, received_cred_def) = await self._get_cred_def(credDefID)
+            cred_defs[received_cred_def_id] = json.loads(received_cred_def)
+        entities = {
+            'schemas': schemas,
+            'cred_defs': cred_defs,
+            'revoc_reg_defs': revoc_reg_defs,
+            'revoc_regs': revoc_regs
+        }
+        return entities
+
+    async def _prover_get_entities_from_ledger(self, identifiers: dict) -> (str, str, str):
+        schemas = {}
+        cred_defs = {}
+        rev_states = {}
+        for item in identifiers.values():
+            (received_schema_id, received_schema) = await self._get_schema(item['schema_id'])
+            schemas[received_schema_id] = json.loads(received_schema)
+            (received_cred_def_id, received_cred_def) = await self._get_cred_def(item['cred_def_id'])
+            cred_defs[received_cred_def_id] = json.loads(received_cred_def)
+        return json.dumps(schemas), json.dumps(cred_defs), json.dumps(rev_states)
+
+    async def _get_schema(self, schema_id: str):
+        get_schema_request = await ledger.build_get_schema_request(self.did, schema_id)
+        get_schema_response = await ledger.submit_request(self.pool, get_schema_request)
+        return await ledger.parse_get_schema_response(get_schema_response)
+
     async def _get_cred_def(self, credDefId):
         req = await ledger.build_get_cred_def_request(self.did, credDefId)
         resp = await ledger.submit_request(self.pool, req)
@@ -135,3 +287,8 @@ class IndyProvider(Provider, IssueCredentialProvider):
         hash = hashlib.sha256(value.encode()).digest()
         num = int.from_bytes(hash, byteorder=sys.byteorder, signed=False)
         return str(num)
+
+    def _nonce(self, strlen=12) -> str:
+        """Generate a random nonce consisting of digits of length 'strlen'"""
+        return ''.join(random.choice(string.digits) for i in range(strlen))
+
