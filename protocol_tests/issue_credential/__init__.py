@@ -194,3 +194,4 @@ class Handler(Module):
         if "~thread" in msg:
             return msg["~thread"]["thid"]
         return msg["@id"]
+

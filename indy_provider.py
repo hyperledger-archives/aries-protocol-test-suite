@@ -291,3 +291,4 @@ class IndyProvider(Provider, IssueCredentialProvider):
     def _nonce(self, strlen=12) -> str:
         """Generate a random nonce consisting of digits of length 'strlen'"""
         return ''.join(random.choice(string.digits) for i in range(strlen))
+

@@ -9,15 +9,28 @@ port = 3000
 endpoint = "http://localhost:3000"
 backchannel = 'default.ManualBackchannel'
 
+#
+# The 'provider' variable is used to dynamically load a provider.
+# A provider is required to test the issue-credential protocol family.
+# The Indy provider is specified as follows:
+#    provider = 'indy_provider.IndyProvider'
+# The Indy provider requires 'genesis_url' to be set to a URL from which the genesis
+# transaction file can be downloaded.  For example, it could be similar to the following:
+#    genesis_url = 'http://ledger/sandbox/pool_transactions_genesis'
+#
+
 # List of regular expressions used to select tests.
 # If a test name matches at least one regex in this list, it will be selected
-# for execution.
+# for execution. matches the @meta data in the desired tests, 
+# for example 'connections,1.0,inviter,response-post-sig-verify-valid'.
 tests = [
-    "connections*",
+    "connections.*",
+    "discover-features.*",
+    # "issue-credential.*",
 ]
 
 [config.subject]
-# Name and version reported in interop profile
+# Name and version reported in interop profile of test subject
 name = "MyAgent"
 version = "1.0.0"
 # Endpoint used for backchannel
