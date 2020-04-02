@@ -1,6 +1,5 @@
 """Connection protocol messages and helpers."""
 
-import base64
 import json
 import re
 import uuid
@@ -186,9 +185,9 @@ class Invite(Message):
 
     def to_url(self):
         """Create invite url from message."""
-        b64_invite = base64.urlsafe_b64encode(
-            bytes(self.serialize(), 'utf-8')
-        ).decode('ascii')
+        b64_invite = crypto.bytes_to_b64(
+            bytes(self.serialize(), 'utf-8'), urlsafe=True
+        )
 
         return '{}?c_i={}'.format(self['serviceEndpoint'], b64_invite)
 
@@ -203,7 +202,9 @@ class Invite(Message):
             # If the invite is base64 url
             matches = re.match('(.+)?c_i=(.+)', invite)
             assert matches, 'Improperly formatted invite url!'
-            invite = base64.urlsafe_b64decode(matches.group(2)).decode('ascii')
+            invite = crypto.b64_to_bytes(
+                matches.group(2), urlsafe=True
+            ).decode('ascii')
 
         invite_msg = cls.deserialize(invite)
 
