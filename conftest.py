@@ -150,7 +150,7 @@ def pytest_collection_modifyitems(session, config, items):
         )
 
     remaining = list(item_pipeline)
-    deselected = set(items) - set(remaining)
+    deselected = list(set(items)-set(remaining))
 
     # Report the deselected items to pytest
     config.hook.pytest_deselected(items=deselected)
