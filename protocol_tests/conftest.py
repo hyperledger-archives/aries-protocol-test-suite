@@ -87,6 +87,7 @@ async def backchannel(config, http_endpoint, suite):
     suite.set_backchannel(backchannel_class())
     await suite.backchannel.setup(config, suite)
     yield suite.backchannel
+    await suite.backchannel.close()
 
 
 @pytest.fixture(scope='session')

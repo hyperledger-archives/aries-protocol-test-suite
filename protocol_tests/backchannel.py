@@ -33,6 +33,13 @@ class Backchannel(ABC):
         """
         raise NotImplementedError()
 
+    async def close(self):
+        """
+        Perform any necessary teardown steps.
+
+        No implementation required by default.
+        """
+
     async def reset(self):
         """
         Reset the agent to a blank state. May also require repopulating
