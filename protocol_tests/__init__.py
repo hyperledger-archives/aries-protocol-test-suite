@@ -3,10 +3,12 @@ from contextlib import contextmanager
 from typing import Dict, Iterable, Union
 import copy
 import json
+import uuid
 
-from aries_staticagent import StaticConnection, Message, crypto
+from aries_staticagent import StaticConnection, Message, Module, crypto
 from .backchannel import Backchannel
 from .provider import Provider
+from .schema import MessageSchema
 
 
 def _recipients_from_packed_message(packed_message: bytes) -> Iterable[str]:
@@ -227,3 +229,101 @@ async def run(generator):
     """
     async for _event, *_data in generator:
         pass
+
+
+class BaseHandler(Module):
+    """
+    Base protocol handler to handle common tasks across all protocols such as thread decorators.
+    """
+
+    DOC_URI = "null_DOC_URI"
+    PROTOCOL = "null_PROTOCOL"
+    VERSION = "null_VERSION"
+
+    def __init__(self):
+        super().__init__()
+        self.reset()
+
+    def reset(self):
+        self.reset_thread_state()
+        self.reset_events()
+
+    def reset_thread_state(self):
+        self.thid = None
+        self.sender_order = -1
+        self.received_orders = {}
+
+    def reset_events(self):
+        self.events = []
+        self.attrs = None
+
+    def add_event(self, name):
+        self.events.append(name)
+
+    def assert_event(self, name):
+        assert name in self.events
+
+    def verify_msg(self, typ, msg, conn, pid, schema):
+        assert msg.mtc.is_authcrypted()
+        assert msg.mtc.sender == crypto.bytes_to_b58(conn.recipients[0])
+        assert msg.mtc.recipient == conn.verkey_b58
+        schema['@type'] = "{}/{}".format(pid, typ)
+        schema['@id'] = str
+        msg_schema = MessageSchema(schema)
+        msg_schema(msg)
+        self._received_msg(msg, conn)
+
+    async def send_async(self, msg, conn):
+        id = self._prepare_to_send_msg(msg)
+        await conn.send_async(msg)
+        return id
+
+    async def send_and_await_reply_async(self, msg, conn):
+        self._prepare_to_send_msg(msg)
+        return await conn.send_and_await_reply_async(msg)
+
+    def _received_msg(self, msg, conn):
+        msgId = msg["@id"]
+        thid = msgId
+        senderId = conn.verkey_b58
+        senderOrder = 0
+        receivedOrders = {}
+        foundThid = False
+        if "~thread" in msg:
+            thread = msg["~thread"]
+            if "thid" in thread:
+                thid = thread["thid"]
+                foundThid = True
+            if "sender_order" in thread:
+                senderOrder = thread["sender_order"]
+            if "received_orders" in thread:
+                receivedOrders = thread["received_orders"]
+        if self.thid:
+            if not foundThid:
+                raise RuntimeError(
+                    'Received message without a ~thread.thid field but is a continuation of thread "{}"; message: {}'.format(self.thid, msg))
+            if not self.thid == thid:
+                raise RuntimeError(
+                    'Received message and was expecting ~thread.thid to be "{}" but found "{}"; message: {}'.format(self.thid, thid, msg))
+        elif not msgId == thid:
+            raise RuntimeError(
+                'There is no existing thread but received a message in which "@id" and "~thread.thid" fields differ; message: {}'.format(msg))
+        self.thid = thid
+
+    def _prepare_to_send_msg(self, msg):
+        if not "@id" in msg:
+            msg["@id"] = self.make_uuid()
+        id = msg["@id"]
+        self.sender_order += 1
+        if self.thid:
+            msg["~thread"] = {
+                "thid": self.thid,
+                "sender_order": self.sender_order,
+                "received_orders": self.received_orders
+            }
+        else:
+            self.thid = id
+        return id
+
+    def make_uuid(self) -> str:
+        return uuid.uuid4().urn[9:]
