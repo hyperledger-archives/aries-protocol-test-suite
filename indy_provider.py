@@ -1,9 +1,17 @@
-import json, aiohttp, base64, time, sys, hashlib, random, string
+import json
+import aiohttp
+import base64
+import time
+import sys
+import hashlib
+import random
+import string
 
 from protocol_tests.provider import Provider
 from protocol_tests.issue_credential.provider import IssueCredentialProvider
 from indy import anoncreds, wallet, ledger, pool, crypto, did, pairwise, non_secrets, ledger, wallet, blob_storage
 from indy.error import IndyError, ErrorCode
+from hashlib import sha256
 
 
 class IndyProvider(Provider, IssueCredentialProvider):
@@ -155,8 +163,8 @@ class IndyProvider(Provider, IssueCredentialProvider):
         revoc_reg_defs_json = json.dumps(entities['revoc_reg_defs'])
         revoc_regs_json = json.dumps(entities['revoc_regs'])
         await anoncreds.verifier_verify_proof(
-                proof_req_json, proof_json, schemas_json, cred_defs_json,
-                revoc_reg_defs_json, revoc_regs_json)
+            proof_req_json, proof_json, schemas_json, cred_defs_json,
+            revoc_reg_defs_json, revoc_regs_json)
         return self._get_proof_info(proof_req, proof)
 
     def _get_proof_info(self, proof_req: dict, proof: dict) -> dict:
@@ -187,12 +195,13 @@ class IndyProvider(Provider, IssueCredentialProvider):
         # For each attribute, replace the hash with the raw value
         revealed_attrs = proof['requested_proof']['revealed_attrs']
         for attr in attributes:
-            attr['value'] = self._get_raw_for_hash(attr['value'], revealed_attrs)
+            attr['value'] = self._get_raw_for_hash(
+                attr['value'], revealed_attrs)
         # Add self-attested attributes
         sa_attrs = proof['requested_proof']['self_attested_attrs']
         for name, val in sa_attrs.items():
             name = proof_req['requested_attributes'][name]['name']
-            attributes.append({'name': name,'value': val})
+            attributes.append({'name': name, 'value': val})
         proofInfo = {
             'attributes': attributes,
             'predicates': predicates,
@@ -273,22 +282,36 @@ class IndyProvider(Provider, IssueCredentialProvider):
             }
         return result
 
-    def _encode_attr(self, value) -> str:
-        if value is None:
-            return '4294967297'  # sentinel 2**32 + 1
-        s = str(value)
+    # Adapted from https://github.com/hyperledger/aries-cloudagent-python/blob/0000f924a50b6ac5e6342bff90e64864672ee935/aries_cloudagent/messaging/util.py#L106
+    def _encode_attr(self, orig) -> str:
+        """
+        Encode a credential value as an int.
+        Encode credential attribute value, purely stringifying any int32
+        and leaving numeric int32 strings alone, but mapping any other
+        input to a stringified 256-bit (but not 32-bit) integer.
+        Predicates in indy-sdk operate
+        on int32 values properly only when their encoded values match their raw values.
+        Args:
+            orig: original value to encode
+        Returns:
+            encoded value
+        """
+
+        I32_BOUND = 2 ** 31
+        if isinstance(orig, int) and -I32_BOUND <= orig < I32_BOUND:
+            return str(int(orig))  # python bools are ints
+
         try:
-            i = int(value)
-            if 0 <= i < 2**32:  # it's an i32, leave it (as numeric string)
-                return s
+            i32orig = int(str(orig))  # don't encode floats as ints
+            if -I32_BOUND <= i32orig < I32_BOUND:
+                return str(i32orig)
         except (ValueError, TypeError):
             pass
-        # Compute sha256 decimal string
-        hash = hashlib.sha256(value.encode()).digest()
-        num = int.from_bytes(hash, byteorder=sys.byteorder, signed=False)
-        return str(num)
+
+        rv = int.from_bytes(sha256(str(orig).encode()).digest(), "big")
+
+        return str(rv)
 
     def _nonce(self, strlen=12) -> str:
         """Generate a random nonce consisting of digits of length 'strlen'"""
         return ''.join(random.choice(string.digits) for i in range(strlen))
-

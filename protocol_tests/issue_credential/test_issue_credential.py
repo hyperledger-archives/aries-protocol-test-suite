@@ -21,7 +21,7 @@ from . import Handler
 @meta(protocol='issue-credential', version='1.0', role='issuer', name='issuer-initiated')
 async def test_issuer_v1_0_issuer_initiated(backchannel, connection, cred_def1, handler):
     """The agent under test initiates the issuance flow with an offer."""
-    handler.reset_events()
+    handler.reset()
     connection.route_module(handler)
     # Send a credential offer to the test-suite.  The remainder of the flow is automatic since the test-suite automatically
     # accepts the offer and stores the credential.
@@ -45,7 +45,7 @@ async def cred_def1(backchannel, config):
 @meta(protocol='issue-credential', version='1.0', role='holder', name='issuer-initiated')
 async def test_holder_v1_0_issuer_initiated(backchannel, connection, cred_def2, handler):
     """The test suite initiates the issuance flow wth an offer."""
-    handler.reset_events()
+    handler.reset()
     connection.route_module(handler)
     # Send a credential offer to the agent under test
     id = await handler.send_offer_credential(connection, cred_def2, {

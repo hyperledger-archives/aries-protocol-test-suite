@@ -21,7 +21,7 @@ from . import Handler
 @meta(protocol='present-proof', version='1.0', role='prover', name='verifier-initiated')
 async def test_present_proof_v1_0_prover_verifier_initiated(backchannel, connection, cred_def, handler):
     """The test suite begins the present-proof flow by sending a request-presentation message to the agent-under-test."""
-    handler.reset_events()
+    handler.reset()
     # The test suite sends a proof request to the agent-under-test
     proof_request = {
         "name": "aries-test-proof-request1",
@@ -68,7 +68,7 @@ async def cred_def(handler, connection, backchannel):
 @meta(protocol='present-proof', version='1.0', role='verifier', name='prover-initiated')
 async def test_present_proof_v1_0_issuer_initiated(backchannel, connection, handler):
     """The agent-under-test begins the present-proof flow by sending a request-presentation message to the agent-under-test."""
-    handler.reset_events()
+    handler.reset()
     # Initialize the test suite with a credential
     (schema_id, cred_def_id) = await handler.setup_prover("VerifierSchema", "1.0", {"str1": "str1val", "int1": "10"})
     # Tell the agent-under-test to send a proof request
