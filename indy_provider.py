@@ -20,14 +20,20 @@ class IndyProvider(Provider, IssueCredentialProvider):
     """
 
     async def setup(self, config):
-        if not 'genesis_url' in config:
+        if not 'ledger_name' in config:
             raise Exception(
-                "The Indy provider requires a 'genesis_url' value in config.toml")
-        self.genesis_url = config['genesis_url']
-        self.pool_name = config.get('pool_name', 'arie-test')
+                "The Indy provider requires a 'ledger_name' value in config.toml")
+        self.pool_name = config['ledger_name']
+        if not 'ledger_url' in config:
+            raise Exception(
+                "The Indy provider requires a 'ledger_url' value in config.toml")
+        self.ledger_url = config['ledger_url']
+        if not 'seed' in config:
+            raise Exception(
+                "The Indy provider requires a 'seed' value in config.toml")
+        seed = config['seed']
         id = config.get('name', 'test')
         key = config.get('pass', 'testpw')
-        seed = config.get('seed', '000000000000000000000000Steward1')
         self.cfg = json.dumps({'id': id})
         self.creds = json.dumps({'key': key})
         self.seed = json.dumps({'seed': seed})
@@ -40,9 +46,9 @@ class IndyProvider(Provider, IssueCredentialProvider):
         self.master_secret_id = await anoncreds.prover_create_master_secret(self.wallet, None)
         (self.did, self.verkey) = await did.create_and_store_my_did(self.wallet, self.seed)
         # Download the genesis file
-        resp = await aiohttp.ClientSession().get(self.genesis_url)
+        resp = await aiohttp.ClientSession().get(self.ledger_url)
         genesis = await resp.read()
-        genesisFileName = "genesis.aries-test"
+        genesisFileName = "genesis.apts"
         with open(genesisFileName, 'wb') as output:
             output.write(genesis)
         await self._open_pool({'genesis_txn': genesisFileName})
@@ -50,11 +56,20 @@ class IndyProvider(Provider, IssueCredentialProvider):
     async def issue_credential_v1_0_issuer_create_credential_schema(self, name: str, version: str, attrs: [str]) -> str:
         (schema_id, schema) = await anoncreds.issuer_create_schema(
             self.did, name, version, json.dumps(attrs))
+        try:
+           # Check to see if the schema is already on the ledger
+           request = await ledger.build_get_schema_request(self.did, schema_id)
+           response = await ledger.submit_request(self.pool, request)
+           resp = json.loads(response)
+           if resp["result"]["seqNo"]:
+              (_, schema) = await ledger.parse_get_schema_response(response)
+              return schema_id
+        except IndyError as e:
+           pass
+        # Try to write the schema to the ledger
         schema_request = await ledger.build_schema_request(self.did, schema)
-        await ledger.sign_and_submit_request(self.pool,
-                                             self.wallet,
-                                             self.did,
-                                             schema_request)
+        schema_request = await self._append_taa(schema_request)
+        await ledger.sign_and_submit_request(self.pool, self.wallet, self.did, schema_request)
         return schema_id
 
     async def issue_credential_v1_0_issuer_create_credential_definition(self, schema_id) -> str:
@@ -64,6 +79,7 @@ class IndyProvider(Provider, IssueCredentialProvider):
         (cred_def_id, cred_def_json) = await anoncreds.issuer_create_and_store_credential_def(
             self.wallet, self.did, schema, 'TAG1', 'CL', '{"support_revocation": false}')
         cred_def_request = await ledger.build_cred_def_request(self.did, cred_def_json)
+        cred_def_request = await self._append_taa(cred_def_request)
         await ledger.sign_and_submit_request(self.pool, self.wallet, self.did, cred_def_request)
         return cred_def_id
 
@@ -272,6 +288,16 @@ class IndyProvider(Provider, IssueCredentialProvider):
             if e.error_code != ErrorCode.PoolLedgerConfigAlreadyExistsError:
                 raise e
         self.pool = await pool.open_pool_ledger(self.pool_name, json.dumps(cfg))
+
+    async def _append_taa(self, req):
+        getTaaReq = await ledger.build_get_txn_author_agreement_request(self.did, None)
+        response = await ledger.submit_request(self.pool, getTaaReq)
+        taa = (json.loads(response))["result"]["data"]
+        if not taa:
+            return req
+        curTime = int(round(time.time() * 1000))
+        req = await ledger.append_txn_author_agreement_acceptance_to_request(req,taa["text"],taa["version"],taa["digest"],"wallet",curTime)
+        return req
 
     def _encode_attrs(self, attrs: dict) -> dict:
         result = {}
