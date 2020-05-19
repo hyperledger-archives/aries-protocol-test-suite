@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+# (C) Copyright IBM Corp. 2019
+#
+if [ "$CLEAN" = "true" ]; then
+   echo "Cleaning ..."
+   rm -rf /var/lib/indy/*
+   echo "Completed cleaning"
+else
+   echo "Not cleaning ..."
+fi
+IP=$EXTERNAL_IP
+if [ "$IP" = "" ]; then
+   IP=$(ip a | perl -lne 'print $1 if /([0-9.]+).*global/')
+fi
+echo "Starting ledger's node pool on IP $IP ..."
+genesisFile=/var/lib/indy/sandbox/pool_transactions_genesis
+if [ ! -f $genesisFile ]; then
+    echo "Generating genesis file at $genesisFile ..."
+    /home/indy/bin/generate_indy_pool_transactions --nodes 4 --clients 5 --nodeNum 1 2 3 4 --ips="$IP,$IP,$IP,$IP"
+else
+    echo "Genesis file already exists at $genesisFile ..."
+fi
+chown -R indy:indy /var/lib/indy 
+echo "Starting supervisord ..."
+/usr/bin/supervisord -c /etc/supervisord.conf
+echo "Ledger's node pool has been started"

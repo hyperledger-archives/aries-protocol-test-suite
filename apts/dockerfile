@@ -1,0 +1,69 @@
+FROM ubuntu:18.04
+
+ARG INDY_VERSION=1.14.2
+
+ENV LC_ALL="C.UTF-8"
+ENV LANG="C.UTF-8"
+ENV SHELL="/bin/bash"
+
+# Install base packages
+RUN apt-get update && \
+    apt-get install -y \
+      sudo \
+      pkg-config \
+      libssl-dev \
+      libgmp3-dev \
+      curl \
+      net-tools \
+      build-essential \
+      libsqlite3-dev \
+      cmake \
+      git \
+      apt-transport-https \
+      ca-certificates \
+      maven \
+      debhelper \
+      wget \
+      devscripts \
+      libncursesw5-dev \
+      libzmq3-dev \
+      zip \
+      unzip \
+      jq \
+      vim
+
+# install libsodium
+RUN cd /tmp && \
+    curl https://download.libsodium.org/libsodium/releases/libsodium-1.0.18.tar.gz | tar -xz && \
+    cd /tmp/libsodium-1.0.18 && \
+    ./configure --disable-shared && \
+    make && \
+    make install && \
+    rm -rf /tmp/libsodium-1.0.18
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.36.0
+ENV PATH .:/root/.cargo/bin:$PATH
+
+# Install clippy to the Rust toolchain
+RUN rustup component add clippy
+
+# Clone, build, and set environment variable to point to indy-sdk
+RUN git clone https://github.com/hyperledger/indy-sdk.git -b v$INDY_VERSION --single-branch --depth=1
+RUN cd indy-sdk/libindy && cargo build
+ENV LD_LIBRARY_PATH /indy-sdk/libindy/target/debug
+
+# Install python, pip, and venv
+RUN apt install -y software-properties-common
+RUN add-apt-repository ppa:deadsnakes/ppa
+RUN apt install -y python3-pip python3-venv
+
+RUN git clone https://github.com/hyperledger/aries-protocol-test-suite.git --single-branch --depth=1
+ADD src /aries-protocol-test-suite
+
+# Setup the test suite
+WORKDIR /aries-protocol-test-suite
+RUN python3.6 -m venv env
+RUN . env/bin/activate
+RUN pip3 install -e .
+RUN pip3 install python3-indy==$INDY_VERSION
+
+CMD ["/bin/bash","-c","/usr/local/bin/protocoltest"]

@@ -1,0 +1,12 @@
+server {
+        listen 8000 default_server;
+        listen [::]:8000 default_server;
+
+        server_name _;
+
+        root /var/lib/indy;
+
+        location / {
+                autoindex on;
+        }
+}
