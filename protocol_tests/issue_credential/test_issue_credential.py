@@ -25,7 +25,7 @@ async def test_issuer_v1_0_issuer_initiated(backchannel, connection, cred_def1, 
     connection.route_module(handler)
     # Send a credential offer to the test-suite.  The remainder of the flow is automatic since the test-suite automatically
     # accepts the offer and stores the credential.
-    await backchannel.issue_credential_v1_0_issuer_send_cred_offer(connection, cred_def1, {"name": "Alice", "GPA": 4})
+    await backchannel.issue_credential_v1_0_issuer_send_cred_offer(connection, cred_def1, {"name": "Alice", "age": 21})
     # Verifies that this results in a credential stored in the test-suite
     handler.assert_event("credential_stored")
 
@@ -33,7 +33,7 @@ async def test_issuer_v1_0_issuer_initiated(backchannel, connection, cred_def1, 
 @pytest.fixture
 async def cred_def1(backchannel, config):
     """The agent under test is the issuer and so it creates the cred def."""
-    schema_id = await backchannel.issue_credential_v1_0_issuer_create_cred_schema("Transcript", "1.0", ["name", "GPA"])
+    schema_id = await backchannel.issue_credential_v1_0_issuer_create_cred_schema("APTSSchema", "1.0", ["name", "age"])
     return await backchannel.issue_credential_v1_0_issuer_create_cred_def(schema_id)
 
 ###
@@ -44,13 +44,13 @@ async def cred_def1(backchannel, config):
 @pytest.mark.asyncio
 @meta(protocol='issue-credential', version='1.0', role='holder', name='issuer-initiated')
 async def test_holder_v1_0_issuer_initiated(backchannel, connection, cred_def2, handler):
-    """The test suite initiates the issuance flow wth an offer."""
+    """The test suite initiates the issuance flow with an offer."""
     handler.reset()
     connection.route_module(handler)
     # Send a credential offer to the agent under test
     id = await handler.send_offer_credential(connection, cred_def2, {
         "name": "Alice",
-        "GPA": "4"
+        "age": "21"
     })
     # Tell the agent under test to accept this credential offer
     await backchannel.issue_credential_v1_0_holder_accept_cred_offer(id)
@@ -63,7 +63,7 @@ async def test_holder_v1_0_issuer_initiated(backchannel, connection, cred_def2, 
 @pytest.fixture
 async def cred_def2(config, backchannel, handler) -> str:
     """The agent under test is the holder and so the test suite creates the cred def."""
-    schema_id = await handler.create_cred_schema("Transcript", "2.0", ["name", "GPA"])
+    schema_id = await handler.create_cred_schema("APTSSchema", "1.1", ["name", "age"])
     cred_def_id = await handler.create_cred_def(schema_id)
     return cred_def_id
 
