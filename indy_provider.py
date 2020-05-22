@@ -1,12 +1,6 @@
-import json
-import aiohttp
-import base64
-import time
-import sys
-import hashlib
-import random
-import string
+import json, aiohttp, base64, sys, hashlib, random, string
 
+from datetime import datetime, date
 from protocol_tests.provider import Provider
 from protocol_tests.issue_credential.provider import IssueCredentialProvider
 from indy import anoncreds, wallet, ledger, pool, crypto, did, pairwise, non_secrets, ledger, wallet, blob_storage
@@ -28,10 +22,10 @@ class IndyProvider(Provider, IssueCredentialProvider):
             raise Exception(
                 "The Indy provider requires a 'ledger_url' value in config.toml")
         self.ledger_url = config['ledger_url']
-        if not 'seed' in config:
+        if not 'ledger_apts_seed' in config:
             raise Exception(
-                "The Indy provider requires a 'seed' value in config.toml")
-        seed = config['seed']
+                "The Indy provider requires a 'ledger_apts_seed' value in config.toml")
+        seed = config['ledger_apts_seed']
         id = config.get('name', 'test')
         key = config.get('pass', 'testpw')
         self.cfg = json.dumps({'id': id})
@@ -295,7 +289,7 @@ class IndyProvider(Provider, IssueCredentialProvider):
         taa = (json.loads(response))["result"]["data"]
         if not taa:
             return req
-        curTime = int(round(time.time() * 1000))
+        curTime = int(datetime.combine(date.today(), datetime.min.time()).timestamp())
         req = await ledger.append_txn_author_agreement_acceptance_to_request(req,taa["text"],taa["version"],taa["digest"],"wallet",curTime)
         return req
 
