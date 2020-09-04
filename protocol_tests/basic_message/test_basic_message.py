@@ -9,7 +9,7 @@ import string
 
 import pytest
 from aries_staticagent import Message
-from voluptuous import Match
+from voluptuous import Match, Any
 
 from reporting import meta
 from ..schema import MessageSchema, Should
@@ -17,10 +17,12 @@ from ..schema import MessageSchema, Should
 ISO_8601_REGEX = r'^(-?(?:[1-9][0-9]*)?[0-9]{4})-(1[0-2]|0[1-9])-(3[01]|0[1-9]|[12][0-9])[ T](2[0-3]|[01][0-9]):([0-5][0-9]):([0-5][0-9])(\.[0-9]+)?(Z|[+-](?:2[0-3]|[01][0-9]):[0-5][0-9])?$'
 
 MSG_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/basicmessage/1.0/message'
+HTTP_MSG_TYPE = 'https://didcomm.org/basicmessage/1.0/message'
 PROBLEM = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/report-problem/1.0/problem-report'
+HTTP_PROBLEM = 'https://didcomm.org/report-problem/1.0/problem-report'
 
 MSG_VALID = MessageSchema({
-    '@type': MSG_TYPE,
+    '@type': Any(MSG_TYPE, HTTP_MSG_TYPE),
     '@id': str,
     Should('~l10n'): {'locale': str},
     'sent_time': Match(ISO_8601_REGEX),
@@ -48,7 +50,7 @@ async def test_receiver(backchannel, connection):
     """Agent under test can receive and handle basic messages."""
     content = random_string()
     msg = Message({
-        '@type': MSG_TYPE,
+        '@type': HTTP_MSG_TYPE,
         '~l10n': {'locale': 'en'},
         'sent_time': timestamp(),
         'content': content

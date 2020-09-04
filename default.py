@@ -57,3 +57,12 @@ class ManualBackchannel(Backchannel, ConnectionsBackchannel):
         print('Paste the following invitation into the test subject.')
         print('Generated invitation: ', invite)
         pause()
+
+    async def out_of_band_v1_0_create_invitation(self) -> str:
+        print('Generate a new out of band invitation on test subject.')
+        return input('Enter invitation URL: ')
+
+    async def out_of_band_v1_0_use_invitation(self, invite):
+        print('Paste the following out of band invitation into the test subject.')
+        print('Generated invitation: ', invite)
+        pause()

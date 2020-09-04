@@ -6,6 +6,7 @@ import json
 import uuid
 
 from aries_staticagent import StaticConnection, Message, Module, crypto
+from voluptuous import Any
 from .backchannel import Backchannel
 from .provider import Provider
 from .schema import MessageSchema
@@ -263,11 +264,11 @@ class BaseHandler(Module):
     def assert_event(self, name):
         assert name in self.events
 
-    def verify_msg(self, typ, msg, conn, pid, schema):
+    def verify_msg(self, typ, msg, conn, pid, schema, alt_pid=None):
         assert msg.mtc.is_authcrypted()
         assert msg.mtc.sender == crypto.bytes_to_b58(conn.recipients[0])
         assert msg.mtc.recipient == conn.verkey_b58
-        schema['@type'] = "{}/{}".format(pid, typ)
+        schema['@type'] = Any("{}/{}".format(pid, typ), "{}/{}".format(pid if not alt_pid else alt_pid, typ))
         schema['@id'] = str
         msg_schema = MessageSchema(schema)
         msg_schema(msg)

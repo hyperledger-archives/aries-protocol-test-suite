@@ -10,10 +10,13 @@ class Handler(BaseHandler):
     """
 
     DOC_URI = "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/"
+    DOC_URI_HTTP = "https://didcomm.org/"
     PROTOCOL = "issue-credential"
     VERSION = "1.0"
     ROLES = ["issuer", "holder"]
-    PID = "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/issue-credential/1.0"
+
+    PID = "{}{}/{}".format(DOC_URI_HTTP, PROTOCOL, VERSION)
+    ALT_PID = "{}{}/{}".format(DOC_URI, PROTOCOL, VERSION)
 
     def __init__(self, provider):
         super().__init__()
@@ -81,7 +84,7 @@ class Handler(BaseHandler):
                     }
                 }
             ]
-        })
+        }, alt_pid=Handler.ALT_PID)
         offer_attach = msg['offers~attach'][0]['data']['base64']
         # Call the provider to create the credential request
         (request_attach, passback) = await self.provider.issue_credential_v1_0_holder_create_credential_request(offer_attach)
@@ -111,7 +114,7 @@ class Handler(BaseHandler):
                     }
                 }
             ]
-        })
+        }, alt_pid=self.ALT_PID)
         cred_attach = reply['credentials~attach'][0]['data']['base64']
         await self.provider.issue_credential_v1_0_holder_store_credential(cred_attach, passback)
         self.add_event("credential_stored")
@@ -131,7 +134,7 @@ class Handler(BaseHandler):
                     }
                 }
             ]
-        })
+        }, alt_pid=self.ALT_PID)
         req_attach = msg['requests~attach'][0]['data']['base64']
         # Call the provider to create the credential
         cred_attach = await self.provider.issue_credential_v1_0_issuer_create_credential(self.offer, req_attach, self.attrs)
@@ -156,7 +159,7 @@ class Handler(BaseHandler):
     async def handle_ack(self, msg, conn):
         """Handle an ack message. """
         # Verify the ack message
-        self.verify_msg('ack', msg, conn, self.PID, {})
+        self.verify_msg('ack', msg, conn, self.PID, {}, alt_pid=self.ALT_PID)
         self.add_event("ack")
 
     def attrs_to_preview_attrs(self, attrs: dict) -> [dict]:

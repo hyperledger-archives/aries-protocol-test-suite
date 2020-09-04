@@ -45,15 +45,18 @@ class MessageSchema():  # pylint: disable=too-few-public-methods
     When `allow_extra` is True, unexpected attributes are removed from the
     validated message and a warning is logged.
 
+    When `default_required` is True, the validation will treat all keys as required unless
+    otherwise specified.
+
     If `Should` keys are found, the validated message is checked for missing
     `Should` keys and a warning is logged for each missing.
     """
     __slots__ = ('schema', 'validator', 'extra')
 
-    def __init__(self, schema, allow_extra=True):
+    def __init__(self, schema, allow_extra=True, default_required=False):
         self.schema = schema
         self.extra = REMOVE_EXTRA if allow_extra else PREVENT_EXTRA
-        self.validator = Schema(schema, extra=self.extra)
+        self.validator = Schema(schema, extra=self.extra, required=default_required)
 
 
     def __call__(self, msg):
