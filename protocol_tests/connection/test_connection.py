@@ -19,18 +19,35 @@ from aries_staticagent.mtc import (
 
 async def _oob_receiver_flow(config, backchannel, temporary_channel):
     """Protocol generator for receiver role."""
-    # They create an inv and give it to me to use
+    # They create an invitation and give it to me to use
 
+    # Create an OOB invitation through the backchannel
     invite_url = await backchannel.out_of_band_v1_0_create_invitation()
+
+    # Parse the invitation and validate the schema
     invite = OutOfBandInvite.parse_url(invite_url)
     invite.validate()
+    yield 'invite', invite
 
+    # Extract the connection information from the invitation
     info = invite.get_connection_info()
-    preferred_handshake_protocol = invite.get_preferred_handshake_protocol()
+    yield 'connection_info', info
 
+    # Find the first supported handshake protocol from the list
+    # TODO: If there's no handshake protocols in the list,
+    # then we need to handle the request attach instead. Not implemented yet.
+    preferred_handshake_protocol = invite.get_preferred_handshake_protocol()
     yield 'preferred_handshake_protocol', preferred_handshake_protocol
+
+    # Let's generate some connection information for the suite
     with temporary_channel(**info._asdict()) as conn:
+        # TODO: If the first handshake protocol fails,
+        # we should try to create a connection with the next one
+
+        # If we're handling a DID exchange
         if preferred_handshake_protocol in OutOfBandInvite.DID_EXCHANGE_TYPES:
+
+            # Make a DID exchange request
             request = DidExchangeRequest.make(
                 conn.did,
                 conn.verkey_b58,
@@ -39,6 +56,8 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
                 'test-oob-connection-started-by-suite-did-exchange'
             )
 
+            yield 'did_exchange_request', request
+            # Send out the DID exchange request, wait for the response and validate it
             response = DidExchangeResponse(await conn.send_and_await_reply_async(
                 request,
                 condition=lambda msg: msg.type == (DidExchangeResponse.TYPE or DidExchangeResponse.ALT_TYPE),
@@ -46,9 +65,16 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
             ))
             response.validate()
 
+            yield 'did_exxhange_response', response
+
+            # We need to update the connection information here so we can
+            # properly contact the agent on the other side
             new_info = response.get_connection_info()
             conn.update(**new_info._asdict())
 
+            yield 'new_connection_info', new_info, conn
+
+            # Next, to finish out the flow we have to send out the did exchange compete msg
             complete = {
                 "@type": "https://didcomm.org/didexchange/1.0/complete",
                 "~thread": {
@@ -59,6 +85,9 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
             }
             await conn.send_async(complete)
 
+            yield 'did_exchange_complete', complete, conn
+
+            # Finally, we'll finish up with a trust ping to validate that the connection works
             await conn.send_and_await_reply_async(
                 {
                     '@type': 'https://didcomm.org/trust_ping/1.0/ping',
@@ -67,10 +96,13 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
                 condition=lambda msg: msg.type == ('https://didcomm.org/trust_ping/1.0/ping_response' 
                                                     or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
                 timeout=10,
-            )   
+            )
 
-
+        # Otherwise, we're dealing with a connection protocol
         elif preferred_handshake_protocol in OutOfBandInvite.CONNECTION_TYPES:
+
+            # Same flow here, except with a different protocol.
+            # Make a request, wait for the response, validate the response and update the connection
             request = ConnectionRequest.make(
                 'test-oob-connection-started-by-suite-connections',
                 conn.did,
@@ -78,11 +110,15 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
                 config['endpoint']
             )
 
+            yield 'request', request
+
             response = ConnectionResponse(await conn.send_and_await_reply_async(
                 request,
                 condition=lambda msg: msg.type == (ConnectionResponse.TYPE or ConnectionResponse.ALT_TYPE),
                 timeout=30
             ))
+
+            yield 'response', response
 
             response.validate_pre_sig_verify()
             response.verify_sig(info.recipients[0])
@@ -90,6 +126,8 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
 
             new_info = response.get_connection_info()
             conn.update(**new_info._asdict())
+        
+    yield 'flow_complete', conn
 
 
 
@@ -113,30 +151,38 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
     """Protocol generator for sender role."""
     # I create an invite and they use my invite
 
+    # Start off with generating some connection information for the suite
     with temporary_channel() as conn:
         invite_verkey_b58 = conn.verkey_b58
         invite_sigkey = conn.sigkey
+
+        # Make an OOB invitation to send to our AUT
         invite = OutOfBandInvite.make(
             'test-suite-oob-connection-started-by-agent',
             'Test the interoperability of an agent',
             'p2p-messaging',
-            conn.verkey_b58,
+            invite_verkey_b58,
             config['endpoint'],
             publicDid=conn.did,
-            handshake_protocols=["https://didcomm.org/didexchange/1.0", "https://didcomm.org/connections/1.0"]
+            handshake_protocols=["https://didcomm.org/connections/1.0", "https://didcomm.org/didexchange/1.0"]
         )
 
         yield 'invite', conn, invite
 
+        # Have the AUT use our invitation and wait for the next msg
         with conn.next() as next_request:
             await backchannel.out_of_band_v1_0_use_invitation(invite.to_url())
             msg = await wait_for(next_request, 30)
         
+        # If the agent wants to preform a connection protocol
         if msg['@type'] == (ConnectionRequest.TYPE or ConnectionRequest.ALT_TYPE):
+
+            # Validate their connection request
             request = ConnectionRequest(msg)
             request.validate()
-            yield 'request', conn, request
+            yield 'connection_request', conn, request
 
+            # Make a connection response
             response = ConnectionResponse.make(
                 request.id,
                 conn.did,
@@ -144,18 +190,33 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
                 config['endpoint']
             )
 
+            yield 'connection_response', response
+
+            # Sign it
             response.sign(
                 signer=invite_verkey_b58,
                 secret=invite_sigkey
             )
             yield 'signed_response', conn, response
-        elif msg['@type'] == (DidExchangeRequest.TYPE or DidExchangeRequest.TYPE):
+
+            # Update connection info
+            info = request.get_connection_info()
+            conn.update(**info._asdict())
+
+        # If the agent wants to do a did exchange
+        elif msg['@type'] == (DidExchangeRequest.TYPE or DidExchangeRequest.ALT_TYPE):
+
+            # Validate their request
             request = DidExchangeRequest(msg)
             request.validate()
 
+            yield 'didexchange_request', request
+
+            # Get the did_doc~attach and verify the signature
             attachment = request['did_doc~attach']
             request.verify_signature(attachment['base64'], attachment['jws'])
            
+            # Make the response
             response = DidExchangeResponse.make(
                 request['@id'],
                 conn.did,
@@ -164,25 +225,28 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
                 invite_sigkey,
             )
 
-            yield 'request', conn, request
+            yield 'didexchange_response', response
+
+            info = request.get_connection_info()
+            conn.update(**info._asdict())
+
+            # Send out the response and wait for the did exchange complete message
+            complete = (await conn.send_and_await_reply_async(
+                response, 
+                condition = lambda msg: msg.type == 'https://didcomm.org/didexchange/1.0/complete',
+                timeout=10
+            ))
+
+            # Double check that the thid and pthid are the proper values
+            assert complete["~thread"]["thid"] == request["@id"]
+            assert complete["~thread"]["pthid"] == invite["@id"]
+
         else:
             raise Exception("Expected Connection request or DID exchange request. Found: {}".format(msg['@type']))
 
-        yield 'response', conn, response
-
-        info = request.get_connection_info()
-        conn.update(**info._asdict())
-
-        complete = (await conn.send_and_await_reply_async(
-            response, 
-            condition = lambda msg: msg.type == 'https://didcomm.org/didexchange/1.0/complete',
-            timeout=10
-        ))
-        assert complete["~thread"]["thid"] == request["@id"]
-        assert complete["~thread"]["pthid"] == invite["@id"]
-
-        yield 'connection_complete', complete, conn
+        yield 'connection_complete', conn
             
+        # To finish up, let's go ahead and send out a trust ping to verify the connection works
         await conn.send_and_await_reply_async(
             {
                 '@type': 'https://didcomm.org/trust_ping/1.0/ping',
@@ -193,10 +257,11 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
             timeout=10,
         )
         
+        # Resgister a new handler for the out-of-band handshake reuse.
         handler = HandshakeReuseHandler(invite['@id'])
         conn.route_module(handler)
 
-        # Lets attempt to reuse the invitation here
+        # Let's attempt to reuse the invitation here
         await backchannel.out_of_band_v1_0_use_invitation(invite.to_url())
 
         # Let's test the connection again with a trust ping
@@ -209,6 +274,8 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
                                                     or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
             timeout=10,
         )
+
+    yield 'flow_complete', conn
         
 
 @pytest.fixture

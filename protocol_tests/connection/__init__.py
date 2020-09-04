@@ -659,21 +659,24 @@ class DidExchangeResponse(Message):
     
 
 def jws_sign(did_doc, public_verkey, private_sigkey):
-    """Sign this did_exchange response message."""
+    """ Creates a JWS signature object. """
+
+    # Encode the algorithm for the protected object in the signature.
     protected_obj = json.dumps({"alg":"EdDSA"})
     protected_str = base64.b64encode(protected_obj.encode()).decode()
 
+    # Encode the DIDDoc for the base64 object in the signature.
     b64_did_doc = base64.b64encode(json.dumps(did_doc).encode()).decode()
-    to_sign_bytes = bytes(b64_did_doc, 'ascii')
 
+    # Convert the encoded DIDDoc to bytes and sign it with our b58 private key
+    to_sign_bytes = bytes(b64_did_doc, 'ascii')
     signature = crypto.sign_message(
         to_sign_bytes,
         secret=private_sigkey
     )
 
+    # The output of crypto.sign_message is bytes so we need to convert it to b64
     signature_str = crypto.bytes_to_b64(signature, urlsafe=True)
-
-    crypto.verify_signed_message(signature + to_sign_bytes, crypto.b58_to_bytes(public_verkey))
 
     return {
         'base64': b64_did_doc,
@@ -686,12 +689,17 @@ def jws_sign(did_doc, public_verkey, private_sigkey):
 
 def jws_verify(data, jws_signature):
     """ Verifies a JWS signature"""
+
+    # Let's first check that the algorithm  object in the protected field is up to spec
     protected_obj = eval(base64.b64decode(jws_signature['protected']).decode())
     assert protected_obj == {"alg":"EdDSA"}, "Didn't find {'alg':'EdDSA'} in the proteccted object."
 
+    # Let's convert the fields to bytes so we can verify
     public_verkey = crypto.b58_to_bytes(jws_signature['header']['kid'].split(':')[-1])
+    # The bytes to verify follows the format (signature_bytes + data_bytes)
     to_verify_bytes = crypto.b64_to_bytes(jws_signature['signature'], urlsafe=True) + bytes(data,'ascii')
 
+    # Verify the signature with the public key
     signature_verified = crypto.verify_signed_message(
         to_verify_bytes,
         public_verkey
