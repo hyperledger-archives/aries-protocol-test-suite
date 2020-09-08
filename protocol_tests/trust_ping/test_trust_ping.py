@@ -13,9 +13,10 @@ from aries_staticagent.mtc import (
 
 from reporting import meta
 from ..schema import MessageSchema
+from .. import Suite
 
-TYPE = "https://didcomm.org/trust_ping/1.0/ping"
-ALT_TYPE = "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping"
+TYPE = Suite.TYPE_PREFIX + "trust_ping/1.0/ping"
+ALT_TYPE = Suite.ALT_TYPE_PREFIX + "trust_ping/1.0/ping"
 
 @pytest.mark.asyncio
 @meta(protocol='trust_ping', version='0.1',

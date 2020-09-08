@@ -10,6 +10,7 @@ from reporting import meta
 from ..schema import MessageSchema
 from voluptuous import Any
 from . import Handler
+from .. import Suite
 
 ###
 ### Tests for the requester role
@@ -65,7 +66,7 @@ async def responder(connection, query, comment):
     """Send a query request and return the response."""
     # Send the request
     req = Message({
-        '@type': 'https://didcomm.org/discover-features/1.0/query',
+        '@type': Suite.TYPE_PREFIX + 'discover-features/1.0/query',
         'query': query,
         'comment': comment,
     })
@@ -77,8 +78,8 @@ async def responder(connection, query, comment):
     assert resp.mtc.is_authcrypted()
     assert resp.mtc.sender == crypto.bytes_to_b58(connection.recipients[0])
     assert resp.mtc.recipient == connection.verkey_b58
-    msg_type = 'https://didcomm.org/discover-features/1.0/disclose'
-    alt_msg_type = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/discover-features/1.0/disclose'
+    msg_type = Suite.TYPE_PREFIX + 'discover-features/1.0/disclose'
+    alt_msg_type = Suite.ALT_TYPE_PREFIX + 'discover-features/1.0/disclose'
     resp_schema = MessageSchema({
         '@type': Any(msg_type, alt_msg_type),
         '@id': str,

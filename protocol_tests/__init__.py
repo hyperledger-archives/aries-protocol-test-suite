@@ -42,6 +42,9 @@ class Suite:
     allowing it to be used as the backchannel.
     """
 
+    TYPE_PREFIX = 'https://didcomm.org/'
+    ALT_TYPE_PREFIX = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/'
+
     def __init__(self):
         self.frontchannels: Dict[str, StaticConnection] = {}
         self._backchannel = None

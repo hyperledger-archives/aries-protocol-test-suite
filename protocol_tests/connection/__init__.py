@@ -9,7 +9,7 @@ from collections import namedtuple
 from voluptuous import Schema, Optional, And, Extra, Match, Any, Exclusive
 from aries_staticagent import Message, crypto, route
 from ..schema import MessageSchema, AtLeastOne
-from .. import BaseHandler
+from .. import BaseHandler, Suite
 
 
 TheirInfo = namedtuple(
@@ -160,10 +160,10 @@ class DIDDoc(dict):
 
 class Invite(Message):
     """Invite Message"""
-    ALT_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/connections/1.0/invitation'
-    TYPE = 'https://didcomm.org/connections/1.0/invitation'
-    DID_EXCHANGE_INVITE_TYPE = 'https://didcomm.org/didexchange/1.0/invitation'
-    DID_EXCHANGE_INVITE_ALT_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/didexchange/1.0/invitation'
+    TYPE = Suite.TYPE_PREFIX + 'connections/1.0/invitation'
+    ALT_TYPE = Suite.ALT_TYPE_PREFIX + 'connections/1.0/invitation'
+    DID_EXCHANGE_INVITE_TYPE = Suite.TYPE_PREFIX + 'didexchange/1.0/invitation'
+    DID_EXCHANGE_INVITE_ALT_TYPE = Suite.ALT_TYPE_PREFIX + 'didexchange/1.0/invitation'
     VALIDATOR = MessageSchema({
         '@type': Any(TYPE, ALT_TYPE, DID_EXCHANGE_INVITE_TYPE, DID_EXCHANGE_INVITE_ALT_TYPE),
         '@id': str,
@@ -287,12 +287,12 @@ class HandshakeReuseHandler(BaseHandler):
 
 class OutOfBandInvite(Message):
     """Invite with an out of band message"""
-    ALT_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/out-of-band/1.0/invitation'
-    TYPE = 'https://didcomm.org/out-of-band/1.0/invitation'
+    ALT_TYPE = Suite.ALT_TYPE_PREFIX + 'out-of-band/1.0/invitation'
+    TYPE = Suite.TYPE_PREFIX + 'out-of-band/1.0/invitation'
 
 
-    DID_EXCHANGE_TYPES = ['https://didcomm.org/didexchange/1.0', 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/didexchange/1.0']
-    CONNECTION_TYPES = ['https://didcomm.org/connections/1.0', 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/connections/1.0']
+    DID_EXCHANGE_TYPES = [Suite.TYPE_PREFIX + 'didexchange/1.0', Suite.ALT_TYPE_PREFIX + 'didexchange/1.0']
+    CONNECTION_TYPES = [Suite.TYPE_PREFIX + 'connections/1.0', Suite.ALT_TYPE_PREFIX + 'connections/1.0']
 
     SUPPORTED_PROTOCOLS = DID_EXCHANGE_TYPES + CONNECTION_TYPES
 
@@ -412,8 +412,8 @@ class OutOfBandInvite(Message):
 class ConnectionRequest(Message):
     """Connection request Message"""
 
-    ALT_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/connections/1.0/request'
-    TYPE = 'https://didcomm.org/connections/1.0/request'
+    ALT_TYPE = Suite.ALT_TYPE_PREFIX + 'connections/1.0/request'
+    TYPE = Suite.TYPE_PREFIX + 'connections/1.0/request'
     VALIDATOR = MessageSchema({
         '@type': Any(TYPE, ALT_TYPE),
         '@id': str,
@@ -447,8 +447,8 @@ class ConnectionRequest(Message):
 
 class ConnectionResponse(Message):
     """Connection response Message"""
-    ALT_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/connections/1.0/response'
-    TYPE = 'https://didcomm.org/connections/1.0/response'
+    ALT_TYPE = Suite.ALT_TYPE_PREFIX + 'connections/1.0/response'
+    TYPE = Suite.TYPE_PREFIX + 'connections/1.0/response'
     PRE_SIG_VERIFY_VALIDATOR = MessageSchema({
         '@type': TYPE,
         '@id': str,
@@ -534,8 +534,8 @@ class ConnectionResponse(Message):
 
 
 class DidExchangeRequest(Message):
-    ALT_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/didexchange/1.0/request'
-    TYPE = 'https://didcomm.org/didexchange/1.0/request'
+    ALT_TYPE = Suite.ALT_TYPE_PREFIX + 'didexchange/1.0/request'
+    TYPE = Suite.TYPE_PREFIX + 'didexchange/1.0/request'
 
     verified_did_doc = {}
 
@@ -609,8 +609,8 @@ class DidExchangeRequest(Message):
 
 class DidExchangeResponse(Message):
     """Did exchange response Message"""
-    ALT_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/didexchange/1.0/response'
-    TYPE = 'https://didcomm.org/didexchange/1.0/response'
+    ALT_TYPE = Suite.ALT_TYPE_PREFIX + 'didexchange/1.0/response'
+    TYPE = Suite.TYPE_PREFIX + 'didexchange/1.0/response'
 
     verified_did_doc = {}
 

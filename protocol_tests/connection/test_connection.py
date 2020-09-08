@@ -5,7 +5,7 @@ import pytest
 
 from reporting import meta
 from . import Invite, ConnectionRequest, ConnectionResponse, OutOfBandInvite, TheirInfo, HandshakeReuseHandler, DidExchangeResponse, DidExchangeRequest
-from .. import interrupt, last, event_message_map, run
+from .. import interrupt, last, event_message_map, run, Suite
 
 from aries_staticagent import Message, crypto, route
 from aries_staticagent.mtc import (
@@ -366,8 +366,8 @@ async def test_finish_with_trust_ping(inviter):
             '@type': 'https://didcomm.org/trust_ping/1.0/ping',
             'response_requested': True
         },
-        condition=lambda msg: msg.type == ('https://didcomm.org/trust_ping/1.0/ping_response' 
-                                                    or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
+        condition=lambda msg: msg.type == (Suite.TYPE_PREFIX + 'trust_ping/1.0/ping_response' 
+                                                    or Suite.ALT_TYPE_PREFIX + 'trust_ping/1.0/ping_response'),
         timeout=5,
     )
 
