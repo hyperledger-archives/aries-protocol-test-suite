@@ -245,8 +245,8 @@ class HandshakeReuseHandler(BaseHandler):
         self.invite_id = invite_id
 
     @route("{}/handshake-reuse".format(PID))
-    async def handshake_reuse(self, msg, conn):
-        """Handle a discover-features query message. """
+    async def handle_handshake_reuse(self, msg, conn):
+        """ Handle a handshake-reuse message and send the handshake-reuse-accepted message. """
         # Verify the message
         assert msg['~thread']['pthid'] == self.invite_id, 'The pthid of the reuse message should mirror the invitation ID'
 
@@ -259,6 +259,30 @@ class HandshakeReuseHandler(BaseHandler):
             }
         }
         await conn.send_async(handshake_reuse_accepted)
+
+
+    async def send_handshake_reuse(self, conn):
+        """ Send a handshake-reuse message and wait for the handshake-reuse-accepted message. """
+        id = str(uuid.uuid4())
+        handshake_reuse = {
+            "@type": '{}/{}'.format(HandshakeReuseHandler.PID, 'handshake-reuse'),
+            "@id": id,
+            "~thread": {
+                "thid": id,
+                "pthid": self.invite_id
+            }
+        }
+        handshake_reuse_accepted = await conn.send_and_await_reply_async(
+            handshake_reuse,
+            condition=lambda msg: msg.type == ('{}/{}'.format(HandshakeReuseHandler.PID, 'handshake-reuse-accepted') 
+                                                or '{}/{}'.format(HandshakeReuseHandler.ALT_PID, 'handshake-reuse-accepted')),
+            timeout=10,
+        )
+
+        assert handshake_reuse_accepted['~thread']['thid'] == id, \
+            'The thread id of the reuse accepted message should mirror the reuse message ID'
+        assert handshake_reuse_accepted['~thread']['pthid'] == self.invite_id, \
+            'The pthid of the reuse accepted message should mirror the invitation ID'
 
 
 class OutOfBandInvite(Message):

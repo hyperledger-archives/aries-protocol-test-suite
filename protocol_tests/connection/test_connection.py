@@ -65,7 +65,7 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
             ))
             response.validate()
 
-            yield 'did_exxhange_response', response
+            yield 'did_exchange_response', response
 
             # We need to update the connection information here so we can
             # properly contact the agent on the other side
@@ -86,17 +86,6 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
             await conn.send_async(complete)
 
             yield 'did_exchange_complete', complete, conn
-
-            # Finally, we'll finish up with a trust ping to validate that the connection works
-            await conn.send_and_await_reply_async(
-                {
-                    '@type': 'https://didcomm.org/trust_ping/1.0/ping',
-                    'response_requested': True
-                },
-                condition=lambda msg: msg.type == ('https://didcomm.org/trust_ping/1.0/ping_response' 
-                                                    or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
-                timeout=10,
-            )
 
         # Otherwise, we're dealing with a connection protocol
         elif preferred_handshake_protocol in OutOfBandInvite.CONNECTION_TYPES:
@@ -126,6 +115,36 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
 
             new_info = response.get_connection_info()
             conn.update(**new_info._asdict())
+
+
+        # Finally, we'll finish up with a trust ping to validate that the connection works
+        await conn.send_and_await_reply_async(
+            {
+                '@type': 'https://didcomm.org/trust_ping/1.0/ping',
+                'response_requested': True
+            },
+            condition=lambda msg: msg.type == ('https://didcomm.org/trust_ping/1.0/ping_response' 
+                                                or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
+            timeout=10,
+        )
+
+        # Resgister a new handler for the out-of-band handshake reuse.
+        handler = HandshakeReuseHandler(invite['@id'])
+        conn.route_module(handler)
+
+        # Let's attempt to reuse the invitation here
+        await handler.send_handshake_reuse(conn)
+
+        # Let's test the connection again with a trust ping
+        await conn.send_and_await_reply_async(
+            {
+                '@type': 'https://didcomm.org/trust_ping/1.0/ping',
+                'response_requested': True
+            },
+            condition=lambda msg: msg.type == ('https://didcomm.org/trust_ping/1.0/ping_response' 
+                                                    or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
+            timeout=10,
+        )
         
     yield 'flow_complete', conn
 
