@@ -116,17 +116,8 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
             new_info = response.get_connection_info()
             conn.update(**new_info._asdict())
 
-
-        # Finally, we'll finish up with a trust ping to validate that the connection works
-        await conn.send_and_await_reply_async(
-            {
-                '@type': 'https://didcomm.org/trust_ping/1.0/ping',
-                'response_requested': True
-            },
-            condition=lambda msg: msg.type == ('https://didcomm.org/trust_ping/1.0/ping_response' 
-                                                or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
-            timeout=10,
-        )
+        else:
+            raise Exception('No supported handshake protocols found.')
 
         # Resgister a new handler for the out-of-band handshake reuse.
         handler = HandshakeReuseHandler(invite['@id'])
@@ -135,17 +126,6 @@ async def _oob_receiver_flow(config, backchannel, temporary_channel):
         # Let's attempt to reuse the invitation here
         await handler.send_handshake_reuse(conn)
 
-        # Let's test the connection again with a trust ping
-        await conn.send_and_await_reply_async(
-            {
-                '@type': 'https://didcomm.org/trust_ping/1.0/ping',
-                'response_requested': True
-            },
-            condition=lambda msg: msg.type == ('https://didcomm.org/trust_ping/1.0/ping_response' 
-                                                    or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
-            timeout=10,
-        )
-        
     yield 'flow_complete', conn
 
 
@@ -231,10 +211,6 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
 
             yield 'didexchange_request', request
 
-            # Get the did_doc~attach and verify the signature
-            # attachment = request['did_doc~attach']
-            # request.verify_signature(attachment['base64'], attachment['jws'])
-           
             # Make the response
             response = DidExchangeResponse.make(
                 request['@id'],
@@ -264,17 +240,6 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
             raise Exception("Expected Connection request or DID exchange request. Found: {}".format(msg['@type']))
 
         yield 'connection_complete', conn
-            
-        # To finish up, let's go ahead and send out a trust ping to verify the connection works
-        await conn.send_and_await_reply_async(
-            {
-                '@type': 'https://didcomm.org/trust_ping/1.0/ping',
-                'response_requested': True
-            },
-            condition=lambda msg: msg.type == ('https://didcomm.org/trust_ping/1.0/ping_response' 
-                                                    or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
-            timeout=10,
-        )
         
         # Resgister a new handler for the out-of-band handshake reuse.
         handler = HandshakeReuseHandler(invite['@id'])
@@ -282,17 +247,6 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
 
         # Let's attempt to reuse the invitation here
         await backchannel.out_of_band_v1_0_use_invitation(invite.to_url())
-
-        # Let's test the connection again with a trust ping
-        await conn.send_and_await_reply_async(
-            {
-                '@type': 'https://didcomm.org/trust_ping/1.0/ping',
-                'response_requested': True
-            },
-            condition=lambda msg: msg.type == ('https://didcomm.org/trust_ping/1.0/ping_response' 
-                                                    or 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response'),
-            timeout=10,
-        )
 
     yield 'flow_complete', conn
         
