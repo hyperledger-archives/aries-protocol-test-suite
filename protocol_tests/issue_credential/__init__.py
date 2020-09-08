@@ -90,7 +90,7 @@ class Handler(BaseHandler):
         (request_attach, passback) = await self.provider.issue_credential_v1_0_holder_create_credential_request(offer_attach)
         # Send the request-credential message and wait for the reply
         req = {
-            "@type": "{}/request-credential".format(self.PID),
+            "@type": "{}/request-credential".format(Handler.PID),
             "comment": "some comment",
             "requests~attach": [
                 {
@@ -103,7 +103,7 @@ class Handler(BaseHandler):
             ]
         }
         reply = await self.send_and_await_reply_async(req, conn)
-        self.verify_msg('issue-credential', reply, conn, self.PID, {
+        self.verify_msg('issue-credential', reply, conn, Handler.PID, {
             Optional('comment'): str,
             'credentials~attach': [
                 {
@@ -114,7 +114,7 @@ class Handler(BaseHandler):
                     }
                 }
             ]
-        }, alt_pid=self.ALT_PID)
+        }, alt_pid=Handler.ALT_PID)
         cred_attach = reply['credentials~attach'][0]['data']['base64']
         await self.provider.issue_credential_v1_0_holder_store_credential(cred_attach, passback)
         self.add_event("credential_stored")
@@ -123,7 +123,7 @@ class Handler(BaseHandler):
     async def handle_request_credential(self, msg, conn):
         """Handle a request-credential message. """
         # Verify the request-credential message
-        self.verify_msg('request-credential', msg, conn, self.PID, {
+        self.verify_msg('request-credential', msg, conn, Handler.PID, {
             Optional('comment'): str,
             'requests~attach': [
                 {
@@ -134,13 +134,13 @@ class Handler(BaseHandler):
                     }
                 }
             ]
-        }, alt_pid=self.ALT_PID)
+        }, alt_pid=Handler.ALT_PID)
         req_attach = msg['requests~attach'][0]['data']['base64']
         # Call the provider to create the credential
         cred_attach = await self.provider.issue_credential_v1_0_issuer_create_credential(self.offer, req_attach, self.attrs)
         # Send the issue-credential message and wait for the reply
         msg = {
-            "@type": "{}/issue-credential".format(self.PID),
+            "@type": "{}/issue-credential".format(Handler.PID),
             "comment": "some comment",
             "credentials~attach": [
                 {
@@ -159,7 +159,7 @@ class Handler(BaseHandler):
     async def handle_ack(self, msg, conn):
         """Handle an ack message. """
         # Verify the ack message
-        self.verify_msg('ack', msg, conn, self.PID, {}, alt_pid=self.ALT_PID)
+        self.verify_msg('ack', msg, conn, Handler.PID, {}, alt_pid=Handler.ALT_PID)
         self.add_event("ack")
 
     def attrs_to_preview_attrs(self, attrs: dict) -> [dict]:
