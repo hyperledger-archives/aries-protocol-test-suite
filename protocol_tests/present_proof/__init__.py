@@ -12,10 +12,13 @@ class Handler(IssueCredentialHandler):
     """
 
     DOC_URI = "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/"
+    DOC_URI_HTTP = "https://didcomm.org/"
     PROTOCOL = "present-proof"
     VERSION = "1.0"
     ROLES = ["prover", "verifier"]
-    PP_PID = "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/present-proof/1.0"
+    
+    PID = "{}{}/{}".format(DOC_URI_HTTP, PROTOCOL, VERSION)
+    ALT_PID = "{}{}/{}".format(DOC_URI, PROTOCOL, VERSION)
 
     def __init__(self, provider):
         super().__init__(provider)
@@ -36,7 +39,7 @@ class Handler(IssueCredentialHandler):
         """Send a request-presentation message to the agent under test."""
         (attach, self.proof_request) = await self.provider.present_proof_v1_0_verifier_request_presentation(proof_request)
         msg = Message({
-            "@type": "{}/request-presentation".format(Handler.PP_PID),
+            "@type": "{}/request-presentation".format(Handler.PID),
             'comment': "Request presentation from aries-protocol-test-suite",
             'request_presentations~attach': [
                 {
@@ -51,17 +54,17 @@ class Handler(IssueCredentialHandler):
         id = await self.send_async(msg, conn)
         return id
 
-    @route("{}/propose-credential".format(PP_PID))
+    @route("{}/propose-credential".format(PID))
     async def propose_presentation(self, msg, conn):
         """Handle a propose-presentation message. """
         # TODO: implement
         raise NotImplementedError()
 
-    @route("{}/request-presentation".format(PP_PID))
+    @route("{}/request-presentation".format(PID))
     async def handle_request_presentation(self, msg, conn):
         """Handle an request-presentation message. """
         # Verify the format of the request-presentation message
-        self.verify_msg('request-presentation', msg, conn, Handler.PP_PID, {
+        self.verify_msg('request-presentation', msg, conn, Handler.PID, {
             Optional('comment'): str,
             'request_presentations~attach': [
                 {
@@ -72,13 +75,13 @@ class Handler(IssueCredentialHandler):
                     }
                 }
             ]
-        })
+        }, alt_pid=Handler.ALT_PID)
         req_attach = msg['request_presentations~attach'][0]['data']['base64']
         # Call the provider to create the credential request
         b64_proof = await self.provider.present_proof_v1_0_prover_create_presentation(req_attach)
         # Send the request-credential message and wait for the reply
         msg = {
-            "@type": "{}/presentation".format(Handler.PP_PID),
+            "@type": "{}/presentation".format(Handler.PID),
             "comment": "This is my proof",
             "presentations~attach": [
                 {
@@ -91,11 +94,11 @@ class Handler(IssueCredentialHandler):
         reply = await self.send_and_await_reply_async(msg, conn)
         self.add_event("sent_proof")
 
-    @route("{}/presentation".format(PP_PID))
+    @route("{}/presentation".format(PID))
     async def handle_presentation(self, msg, conn):
         """Handle a presentation message. """
         # Verify the presentation message
-        self.verify_msg('presentation', msg, conn, Handler.PP_PID, {
+        self.verify_msg('presentation', msg, conn, Handler.PID, {
             Optional('comment'): str,
             'presentations~attach': [
                 {
@@ -106,7 +109,7 @@ class Handler(IssueCredentialHandler):
                     }
                 }
             ]
-        })
+        }, alt_pid=Handler.ALT_PID)
         attach = msg['presentations~attach'][0]['data']['base64']
         # Call the provider to verify the proof
         attrs = await self.provider.present_proof_v1_0_verifier_verify_presentation(attach, self.proof_request)

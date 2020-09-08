@@ -12,10 +12,12 @@ class Handler(BaseHandler):
     """
 
     DOC_URI = "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/"
+    DOC_URI_HTTP = "https://didcomm.org/"
     PROTOCOL = "discover-features"
     VERSION = "1.0"
 
-    PID = "{}{}/{}".format(DOC_URI, PROTOCOL, VERSION)
+    PID = "{}{}/{}".format(DOC_URI_HTTP, PROTOCOL, VERSION)
+    ALT_PID = "{}{}/{}".format(DOC_URI, PROTOCOL, VERSION)
     ROLES = ["requester", "responder"]
 
     def __init__(self):
@@ -33,11 +35,9 @@ class Handler(BaseHandler):
         """Handle a discover-features query message. """
         # Verify the query message
         self.verify_msg('query', msg, conn, Handler.PID, {
-            '@type': str(self.type('query')),
-            '@id': str,
             'query': str,
             Optional('comment'): str,
-        })
+        }, alt_pid=Handler.ALT_PID)
         query = msg['query']
         # Find the protocols which match the query message
         matchingProtocols = []

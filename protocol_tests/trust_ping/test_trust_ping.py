@@ -3,7 +3,7 @@
 import asyncio
 
 import pytest
-from voluptuous import Optional
+from voluptuous import Optional, Any
 
 from aries_staticagent import Message, crypto
 from aries_staticagent.mtc import (
@@ -13,7 +13,10 @@ from aries_staticagent.mtc import (
 
 from reporting import meta
 from ..schema import MessageSchema
+from .. import Suite
 
+TYPE = Suite.TYPE_PREFIX + "trust_ping/1.0/ping"
+ALT_TYPE = Suite.ALT_TYPE_PREFIX + "trust_ping/1.0/ping"
 
 @pytest.mark.asyncio
 @meta(protocol='trust_ping', version='0.1',
@@ -22,7 +25,7 @@ async def test_trust_ping_with_response_requested_true(connection):
     """Test that subject responds to trust pings."""
 
     expected_trust_pong_schema = MessageSchema({
-        "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response",
+        "@type": Any(TYPE, ALT_TYPE),
         "@id": str,
         "~thread": {"thid": str},
         Optional("~timing"): {
@@ -33,7 +36,7 @@ async def test_trust_ping_with_response_requested_true(connection):
     })
 
     trust_ping = Message({
-        "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping",
+        "@type": TYPE,
         # "@id" is added by the staticagent lib
         "response_requested": True
     })
@@ -62,7 +65,7 @@ async def test_trust_ping_with_response_requested_true(connection):
 async def test_trust_ping_sender(backchannel, connection):
     """Test that subject sends a trust ping."""
     expected_trust_ping_schema = MessageSchema({
-        "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping",
+        "@type": Any(TYPE, ALT_TYPE),
         "@id": str,
         Optional("~timing"): {
             Optional("out_time"): str,
@@ -83,7 +86,7 @@ async def test_trust_ping_sender(backchannel, connection):
     assert msg.mtc.recipient == connection.verkey_b58
 
     await connection.send_async({
-        "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/trust_ping/1.0/ping_response",
+        "@type": TYPE,
         "~thread": {"thid": msg.id},
     })
 

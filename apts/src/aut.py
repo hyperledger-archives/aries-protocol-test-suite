@@ -44,6 +44,19 @@ class AUTBackchannel(Backchannel, ConnectionsBackchannel, DiscoverFeaturesBackch
         print("Invitation URL: {}".format(invitation_url))
         raise Exception("TODO: implement")
 
+    async def out_of_band_v1_0_create_invitation(self) -> str:
+        """
+        The AUT creates an out of band invitation and returns the invitation URL.
+        """
+        raise Exception("TODO: implement")
+
+    async def out_of_band_v1_0_use_invitation(self, invitation_url):
+        """
+        The AUT accepts an out of band invitation URL.
+        """
+        print("Invitation URL: {}".format(invitation_url))
+        raise Exception("TODO: implement")
+
     async def discover_features_v1_0_requester_start(self, conn, query=".*", comment=""):
         """
         The AUT sends a discover features query over the 'conn' connection.
