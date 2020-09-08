@@ -537,6 +537,8 @@ class DidExchangeRequest(Message):
     ALT_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/didexchange/1.0/request'
     TYPE = 'https://didcomm.org/didexchange/1.0/request'
 
+    verified_did_doc = {}
+
     VALIDATOR = MessageSchema({
         '@type': Any(TYPE, ALT_TYPE),
         '@id': str,
@@ -596,19 +598,21 @@ class DidExchangeRequest(Message):
     def validate(self):
         """Validate this request against the schema."""
         DidExchangeRequest.VALIDATOR(self)
+        jws_verify(self['did_doc~attach']['base64'], self['did_doc~attach']['jws'])
 
-    def verify_signature(self, data, jws_signature):
-        verified = jws_verify(data, jws_signature)
-        self.verified_did_doc = eval(base64.b64decode(data).decode())
+    def get_verified_did_doc(self):
+        return eval(base64.b64decode(self['did_doc~attach']['base64']).decode())
 
     def get_connection_info(self):
-        """Get connection information out of the connection request Message."""
-        return DIDDoc(self.verified_did_doc).get_connection_info()
+        """Get connection information out of the did exchange request message."""
+        return DIDDoc(self.get_verified_did_doc()).get_connection_info()
 
 class DidExchangeResponse(Message):
     """Did exchange response Message"""
     ALT_TYPE = 'did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/didexchange/1.0/response'
     TYPE = 'https://didcomm.org/didexchange/1.0/response'
+
+    verified_did_doc = {}
 
     VALIDATOR = MessageSchema({
         '@type': TYPE,
@@ -632,18 +636,17 @@ class DidExchangeResponse(Message):
         }
     }, default_required=True)
 
-    def verify_signature(self, data, jws_signature):
-        verified = jws_verify(data, jws_signature)
-        self.verified_did_doc = eval(base64.b64decode(data).decode())
+    def get_verified_did_doc(self):
+        return eval(base64.b64decode(self['did_doc~attach']['base64']).decode())
 
     def get_connection_info(self):
-        """Get connection information out of the connection request Message."""
-        return DIDDoc(self.verified_did_doc).get_connection_info()
+        """Get connection information out of the did exchange response message."""
+        return DIDDoc(self.get_verified_did_doc()).get_connection_info()
 
     def validate(self):
         """Validate this response against the schema."""
         DidExchangeResponse.VALIDATOR(self)
-        self.verify_signature(self['did_doc~attach']['base64'], self['did_doc~attach']['jws'])
+        jws_verify(self['did_doc~attach']['base64'], self['did_doc~attach']['jws'])
 
     @classmethod
     def make(cls, request_id, my_did, my_vk, endpoint, sigkey):

@@ -232,8 +232,8 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
             yield 'didexchange_request', request
 
             # Get the did_doc~attach and verify the signature
-            attachment = request['did_doc~attach']
-            request.verify_signature(attachment['base64'], attachment['jws'])
+            # attachment = request['did_doc~attach']
+            # request.verify_signature(attachment['base64'], attachment['jws'])
            
             # Make the response
             response = DidExchangeResponse.make(
