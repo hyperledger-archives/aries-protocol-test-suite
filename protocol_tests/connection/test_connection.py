@@ -202,6 +202,8 @@ async def _oob_sender_flow(config, backchannel, temporary_channel):
             info = request.get_connection_info()
             conn.update(**info._asdict())
 
+            await conn.send_async(response)
+
         # If the agent wants to do a did exchange
         elif msg['@type'] == (DidExchangeRequest.TYPE or DidExchangeRequest.ALT_TYPE):
 
