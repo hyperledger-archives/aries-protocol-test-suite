@@ -1,0 +1,12 @@
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+repository:
+  name: aries-protocol-test-suite
+  default_branch: main
+  archived: true
+  private: false
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: true
