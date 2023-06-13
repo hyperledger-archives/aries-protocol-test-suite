@@ -1,6 +1,18 @@
 Aries Protocol Test Suite
 =========================
 
+# REPOSITORY STATUS: Archived
+
+**This repository has been archived. In its place, we recommend you use the [Aries Agent Test Harness] instead.
+The latest Aries Agent Test Harness test run results can be seen at this site: [https://aries-interop.info].**
+
+--------------
+
+[Aries Agent Test Harness]: https://github.com/hyperledger/aries-agent-test-harness
+[https://aries-interop.info]: https://aries-interop.info
+
+## Introduction
+
 The Aries Protocols Test Suite, or **APTS** for short, allows you to test your agent for Aries compatibility.
 
 ## Prerequisites
